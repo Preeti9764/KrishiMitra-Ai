@@ -21,6 +21,7 @@ class PestAgent:
         return AgentRecommendation(
             agent="pest",
             priority=6,
+            confidence_score=0.7,
             summary="Routine scouting and crop-specific pest watchlist.",
             explanation="Pest monitoring recommendations focus on regular field scouting and crop-specific pest identification to enable early intervention.",
             tasks=tasks,
