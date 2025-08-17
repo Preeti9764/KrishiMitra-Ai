@@ -2,4 +2,13 @@ fastapi
 uvicorn[standard]
 requests
 python-multipart
+pydantic
+python-dotenv
+numpy
+pandas
+scikit-learn
+aiohttp
+httpx
+python-dateutil
+pytz
 

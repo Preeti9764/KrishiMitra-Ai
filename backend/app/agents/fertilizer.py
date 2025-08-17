@@ -35,7 +35,9 @@ class FertilizerAgent:
         return AgentRecommendation(
             agent="fertilizer",
             priority=7,
+            confidence_score=0.8,
             summary="Provide stage-wise NPK recommendation based on crop.",
+            explanation="NPK recommendations are based on crop type and current growth stage, following split application principles for optimal nutrient uptake.",
             tasks=tasks,
             details=details,
         )

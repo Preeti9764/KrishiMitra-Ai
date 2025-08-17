@@ -22,6 +22,7 @@ class PestAgent:
             agent="pest",
             priority=6,
             summary="Routine scouting and crop-specific pest watchlist.",
+            explanation="Pest monitoring recommendations focus on regular field scouting and crop-specific pest identification to enable early intervention.",
             tasks=tasks,
             details={"crop": crop},
         )

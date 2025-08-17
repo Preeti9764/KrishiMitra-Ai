@@ -17,7 +17,9 @@ class MarketAgent:
         return AgentRecommendation(
             agent="market",
             priority=4,
+            confidence_score=0.7,
             summary="Monitor market prices and plan sales timing.",
+            explanation="Market recommendations focus on price monitoring and optimal sales timing to maximize farmer profits.",
             tasks=tasks,
             details={"crop": crop},
         )
