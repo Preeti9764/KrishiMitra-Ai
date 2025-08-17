@@ -7,7 +7,7 @@ class PestAgent:
     Future: CNN vision model + regional outbreak feeds.
     """
 
-    def recommend(self, request: AdvisoryRequest) -> AgentRecommendation:
+    async def recommend(self, request: AdvisoryRequest) -> AgentRecommendation:
         crop = request.profile.crop.lower()
         tasks = [
             "Scout fields twice this week for pest/disease symptoms",

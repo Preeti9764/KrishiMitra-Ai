@@ -7,7 +7,7 @@ class MarketAgent:
     Future: integrate AGMARKNET and time-series price forecasting.
     """
 
-    def recommend(self, request: AdvisoryRequest) -> AgentRecommendation:
+    async def recommend(self, request: AdvisoryRequest) -> AgentRecommendation:
         crop = request.profile.crop.lower()
         tasks = [
             f"Track weekly prices for {crop} at nearest mandis and online platforms",

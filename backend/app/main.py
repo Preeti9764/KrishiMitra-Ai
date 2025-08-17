@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 import time
 from datetime import datetime
 
@@ -27,6 +27,12 @@ coordinator = AdvisoryCoordinator()
 
 # System startup time for uptime calculation
 startup_time = datetime.now()
+
+
+@app.get("/")
+async def root():
+    """Redirect to API documentation"""
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/api/health")

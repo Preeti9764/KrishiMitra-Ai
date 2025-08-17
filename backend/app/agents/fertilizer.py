@@ -10,7 +10,7 @@ NPK_DEFAULTS = {
 class FertilizerAgent:
     """Simple rule-based MVP for NPK recommendation by crop and stage."""
 
-    def recommend(self, request: AdvisoryRequest) -> AgentRecommendation:
+    async def recommend(self, request: AdvisoryRequest) -> AgentRecommendation:
         crop = request.profile.crop.lower()
         stage = (request.profile.growth_stage or "").lower()
         defaults = NPK_DEFAULTS.get(crop, {"N": 100, "P": 50, "K": 40})

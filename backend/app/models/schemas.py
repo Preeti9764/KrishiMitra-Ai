@@ -125,6 +125,7 @@ class AdvisoryResponse(BaseModel):
     market_summary: Optional[Dict[str, Any]] = None
     soil_summary: Optional[Dict[str, Any]] = None
     confidence_overall: float = Field(0.8, ge=0.0, le=1.0)
+    response_time_ms: Optional[float] = None
 
 
 class DataSource(BaseModel):
