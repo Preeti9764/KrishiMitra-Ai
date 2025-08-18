@@ -174,3 +174,28 @@ class VerifyOtpResponse(BaseModel):
     farmer_id: Optional[str] = None
     name: Optional[str] = None
     phone: Optional[str] = None
+
+
+# ===== Chatbot Schemas =====
+class ChatMessage(BaseModel):
+    message: str
+    language: str = Field("en", description="Target language for reply")
+    # Optional context to improve answers
+    farmer_id: Optional[str] = None
+    name: Optional[str] = None
+    location_lat: Optional[float] = None
+    location_lon: Optional[float] = None
+    district: Optional[str] = None
+    state: Optional[str] = None
+    farm_size_hectares: Optional[float] = None
+    crop: Optional[CropType] = None
+    growth_stage: Optional[GrowthStage] = None
+    soil_type: Optional[SoilType] = None
+    irrigation_type: Optional[str] = None
+    farming_practice: Optional[str] = None
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    topic: Optional[str] = None
+    language: str = "en"

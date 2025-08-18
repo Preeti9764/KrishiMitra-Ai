@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import UploadFile, File, Form
 import os
 import requests
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,6 +7,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Dict, Any, List
 
 from .models.schemas import (
     AdvisoryRequest,
@@ -16,6 +18,8 @@ from .models.schemas import (
     SendOtpResponse,
     VerifyOtpRequest,
     VerifyOtpResponse,
+    ChatMessage,
+    ChatResponse,
 )
 from .coordination.coordinator import AdvisoryCoordinator
 from .storage.user_store import UserStore
@@ -514,4 +518,274 @@ async def global_exception_handler(request, exc):
 def get_app() -> FastAPI:
     return app
 
+
+
+# ==================== DISEASE DETECTION (MVP) ====================
+try:
+    import numpy as _np  # type: ignore
+    from PIL import Image as _Image  # type: ignore
+except Exception:
+    _np = None  # type: ignore
+    _Image = None  # type: ignore
+
+
+def _analyze_leaf_image(file_bytes: bytes) -> Dict[str, Any]:
+    """Very lightweight heuristic analyzer for leaf disease detection.
+    Not a real ML model. Uses simple color statistics to guess conditions.
+    Returns a dict with keys: disease, confidence, stats, suggestions.
+    """
+    if _np is None or _Image is None:
+        return {
+            "disease": "unknown",
+            "confidence": 0.3,
+            "stats": {},
+            "suggestions": [
+                "Enable Pillow and NumPy for on-device analysis (install 'pillow').",
+                "Alternatively, consult agronomist if disease suspected.",
+            ],
+        }
+
+    try:
+        img = _Image.open(io.BytesIO(file_bytes)).convert("RGB")  # type: ignore
+    except Exception:
+        return {
+            "disease": "invalid_image",
+            "confidence": 0.0,
+            "stats": {},
+            "suggestions": ["Please upload a valid leaf image (JPG/PNG)."],
+        }
+
+    # Resize small for faster stats
+    img_small = img.resize((256, 256))
+    arr = _np.asarray(img_small).astype("float32")  # shape (H, W, 3)
+    if arr.ndim != 3 or arr.shape[2] != 3:
+        return {
+            "disease": "invalid_image",
+            "confidence": 0.0,
+            "stats": {},
+            "suggestions": ["Please upload a valid RGB leaf image."],
+        }
+
+    r = arr[:, :, 0]
+    g = arr[:, :, 1]
+    b = arr[:, :, 2]
+
+    # Basic color ratios
+    green_ratio = float((g > r) & (g > b)).sum() / float(arr.shape[0] * arr.shape[1])
+    brown_mask = (r > 80) & (g > 40) & (b < 60)
+    brown_ratio = float(brown_mask.sum()) / float(arr.shape[0] * arr.shape[1])
+    yellow_mask = (r > 170) & (g > 170) & (b < 130)
+    yellow_ratio = float(yellow_mask.sum()) / float(arr.shape[0] * arr.shape[1])
+
+    # Edge/spot proxy via channel variance
+    variability = float(arr.var() / (255.0 ** 2))
+
+    # Heuristic rules (very rough, for demo only)
+    guess = "healthy"
+    confidence = 0.6
+    reasons: List[str] = []
+
+    if brown_ratio > 0.08 and variability > 0.02:
+        guess = "leaf_blight"
+        confidence = min(0.9, 0.5 + brown_ratio * 2.0)
+        reasons.append("brown lesions with mottling pattern detected")
+    elif yellow_ratio > 0.08 and green_ratio < 0.6:
+        guess = "nutrient_deficiency"
+        confidence = min(0.85, 0.5 + yellow_ratio * 1.5)
+        reasons.append("yellowing/chlorosis areas detected")
+    elif variability > 0.03 and green_ratio < 0.6:
+        guess = "rust_or_spot"
+        confidence = 0.7
+        reasons.append("spotty texture detected")
+    else:
+        reasons.append("no strong disease patterns detected")
+
+    suggestions_map = {
+        "healthy": [
+            "Leaf appears healthy. Continue routine scouting and balanced irrigation.",
+            "Avoid overwatering and ensure good airflow to prevent fungal growth.",
+        ],
+        "leaf_blight": [
+            "Remove heavily affected leaves to limit spread.",
+            "Apply recommended fungicide as per local guidelines.",
+            "Improve airflow and avoid overhead irrigation in evenings.",
+        ],
+        "nutrient_deficiency": [
+            "Conduct a quick soil test for NPK and micronutrients.",
+            "Apply balanced fertilizer or foliar feed based on deficiency.",
+        ],
+        "rust_or_spot": [
+            "Scout nearby plants for similar lesions.",
+            "Apply targeted fungicide if spread is increasing.",
+            "Avoid leaf wetness for long durations.",
+        ],
+        "unknown": [
+            "Unable to analyze image. Re-take photo in good light, single leaf filling frame.",
+        ],
+        "invalid_image": [
+            "Please upload a clear photo of a single leaf against plain background.",
+        ],
+    }
+
+    stats = {
+        "green_ratio": round(green_ratio, 4),
+        "brown_ratio": round(brown_ratio, 4),
+        "yellow_ratio": round(yellow_ratio, 4),
+        "variability": round(variability, 5),
+        "reasons": reasons,
+    }
+
+    return {
+        "disease": guess,
+        "confidence": round(confidence, 2),
+        "stats": stats,
+        "suggestions": suggestions_map.get(guess, []),
+    }
+
+
+import io  # placed after FastAPI app to avoid circular issues
+
+
+@app.get("/api/disease/labels")
+def disease_labels() -> Dict[str, Any]:
+    return {
+        "supported_crops": [
+            "wheat",
+            "rice",
+            "maize",
+            "cotton",
+            "vegetables",
+        ],
+        "possible_conditions": [
+            "healthy",
+            "leaf_blight",
+            "rust_or_spot",
+            "nutrient_deficiency",
+        ],
+    }
+
+
+@app.post("/api/disease/diagnose")
+async def diagnose_disease(
+    crop: str = Form("generic"),
+    language: str = Form("en"),
+    image: UploadFile = File(...),
+):
+    try:
+        content = await image.read()
+        result = _analyze_leaf_image(content)
+
+        # Translate suggestions if needed
+        if language != "en":
+            try:
+                result["suggestions"] = [
+                    coordinator._translate_text(s, language) for s in (result.get("suggestions") or [])
+                ]
+                # Also translate the reasons within stats
+                stats = result.get("stats") or {}
+                reasons = stats.get("reasons") or []
+                stats["reasons"] = [coordinator._translate_text(r, language) for r in reasons]
+                result["stats"] = stats
+            except Exception:
+                pass
+
+        return {
+            "crop": crop,
+            **result,
+        }
+    except Exception as exc:
+        print(f"Disease diagnose error: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to analyze image")
+
+
+# ==================== SIMPLE MULTILINGUAL CHATBOT (MVP) ====================
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_endpoint(payload: ChatMessage) -> ChatResponse:
+    """A lightweight, rule-based chatbot that routes to agents when possible and
+    answers in the requested language using best-effort translation.
+    """
+    try:
+        text = (payload.message or "").strip()
+        language = payload.language or "en"
+        topic = "general"
+        lower = text.lower()
+
+        # Naive keyword routing in English
+        if any(k in lower for k in ["irrigation", "water", "moisture"]):
+            topic = "irrigation"
+        elif any(k in lower for k in ["fertilizer", "nutrient", "npk"]):
+            topic = "fertilizer"
+        elif any(k in lower for k in ["pest", "insect", "disease", "fungus", "blight", "rust"]):
+            topic = "pest"
+        elif any(k in lower for k in ["market", "price", "sell", "msps", "msp", "scheme", "loan"]):
+            topic = "market"
+        elif any(k in lower for k in ["weather", "rain", "wind", "heat", "storm"]):
+            topic = "weather_risk"
+
+        # Build a minimal AdvisoryRequest using stored profile if available
+        minimal_request = AdvisoryRequest(
+            profile={
+                "farmer_id": payload.farmer_id or "chat_farmer",
+                "name": payload.name or "Farmer",
+                "location_lat": payload.location_lat or 28.6,
+                "location_lon": payload.location_lon or 77.2,
+                "district": payload.district or "",
+                "state": payload.state or "",
+                "farm_size_hectares": payload.farm_size_hectares or 1.0,
+                "crop": payload.crop or "wheat",
+                "growth_stage": payload.growth_stage or None,
+                "soil_type": payload.soil_type or None,
+                "irrigation_type": payload.irrigation_type or None,
+                "farming_practice": payload.farming_practice or None,
+            },
+            sensors=None,
+            weather=None,
+            market=None,
+            soil_health=None,
+            horizon_days=7,
+            language="en",  # run agents in English
+        )
+
+        # Route to specific agent when relevant, else provide general guidance
+        reply_lines: List[str] = []
+        try:
+            if topic in coordinator.agents:
+                agent = coordinator.agents[topic]
+                rec = await agent.recommend(minimal_request)
+                reply_lines.append(f"{rec.summary}")
+                # Include top tasks
+                for t in rec.tasks[:3]:
+                    reply_lines.append(f"- {t}")
+            else:
+                reply_lines.append(
+                    "I can help with irrigation, fertilizer use, pest control, weather risks, and markets."
+                )
+        except Exception as e:
+            print(f"Chat agent error: {e}")
+            reply_lines.append("Sorry, I could not fetch expert advice right now.")
+
+        # Add small note based on user question
+        if text:
+            reply_lines.append("")
+            reply_lines.append(f"Question understood (approx.): '{text[:120]}'")
+
+        reply_text = "\n".join(reply_lines).strip()
+
+        # Translate to target language if needed
+        if language != "en":
+            try:
+                reply_text = coordinator._translate_text(reply_text, language)
+            except Exception:
+                pass
+
+        return ChatResponse(
+            reply=reply_text,
+            topic=topic,
+            language=language,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"Chat error: {exc}")
+        raise HTTPException(status_code=500, detail="Chat failed")
 

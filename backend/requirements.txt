@@ -12,4 +12,5 @@ httpx
 python-dateutil
 pytz
 twilio
+pillow
 
