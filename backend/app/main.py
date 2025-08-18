@@ -4,7 +4,16 @@ from fastapi.responses import JSONResponse, RedirectResponse
 import time
 from datetime import datetime
 
-from .models.schemas import AdvisoryRequest, AdvisoryResponse, SystemHealth, DataSource
+from .models.schemas import (
+    AdvisoryRequest,
+    AdvisoryResponse,
+    SystemHealth,
+    DataSource,
+    SendOtpRequest,
+    SendOtpResponse,
+    VerifyOtpRequest,
+    VerifyOtpResponse,
+)
 from .coordination.coordinator import AdvisoryCoordinator
 
 
@@ -27,6 +36,10 @@ coordinator = AdvisoryCoordinator()
 
 # System startup time for uptime calculation
 startup_time = datetime.now()
+
+# In-memory stores for demo auth/OTP functionality
+otp_store = {}  # phone -> { code: str, expires_at: datetime }
+phone_to_farmer = {}  # phone -> { farmer_id: str, name: str }
 
 
 @app.get("/")
@@ -124,6 +137,86 @@ def conflict_rules() -> dict:
     return coordinator.get_conflict_rules()
 
 
+# ========== AUTH / OTP ENDPOINTS (MVP) ==========
+@app.post("/api/auth/send-otp", response_model=SendOtpResponse)
+def send_otp(payload: SendOtpRequest) -> SendOtpResponse:
+    """Send an OTP to the provided phone number. For MVP, we generate a code and log it to server stdout.
+    In production, integrate an SMS provider (e.g., Twilio, AWS SNS, Gupshup)."""
+    try:
+        phone = payload.phone.strip()
+        if not phone:
+            raise HTTPException(status_code=400, detail="Phone is required")
+
+        # Generate a 4-digit OTP for MVP
+        import random
+        code = f"{random.randint(1000, 9999)}"
+
+        # Set TTL 5 minutes
+        expires_at = datetime.now() + timedelta(minutes=5)
+        otp_store[phone] = {"code": code, "expires_at": expires_at}
+
+        # If this is a new phone and name provided, tentatively store name (farmer id after verification)
+        if payload.name:
+            phone_to_farmer.setdefault(phone, {"farmer_id": None, "name": payload.name})
+
+        # Log for dev visibility (replace with SMS send)
+        print(f"[OTP] Phone={phone} Code={code} Expires={expires_at}")
+
+        return SendOtpResponse(success=True, message="OTP sent successfully", expires_at=expires_at, dev_code=code)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"Error sending OTP: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to send OTP")
+
+
+from datetime import timedelta
+
+
+@app.post("/api/auth/verify-otp", response_model=VerifyOtpResponse)
+def verify_otp(payload: VerifyOtpRequest) -> VerifyOtpResponse:
+    """Verify an OTP for a phone number. If valid, return or create a farmer_id bound to this phone."""
+    try:
+        phone = payload.phone.strip()
+        otp_record = otp_store.get(phone)
+        if not otp_record:
+            raise HTTPException(status_code=400, detail="No OTP requested for this phone")
+
+        if datetime.now() > otp_record["expires_at"]:
+            del otp_store[phone]
+            raise HTTPException(status_code=400, detail="OTP expired. Please request a new one")
+
+        if payload.otp != otp_record["code"]:
+            raise HTTPException(status_code=400, detail="Invalid OTP")
+
+        # OTP valid → bind or create farmer profile
+        mapping = phone_to_farmer.get(phone)
+        if not mapping or not mapping.get("farmer_id"):
+            # Create a new farmer_id
+            new_id = f"farmer_{int(time.time())}"
+            if not mapping:
+                mapping = {"farmer_id": new_id, "name": "Farmer"}
+            else:
+                mapping["farmer_id"] = new_id
+            phone_to_farmer[phone] = mapping
+
+        # Clean up used OTP
+        del otp_store[phone]
+
+        return VerifyOtpResponse(
+            success=True,
+            message="OTP verified",
+            farmer_id=mapping["farmer_id"],
+            name=mapping.get("name"),
+            phone=phone,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"Error verifying OTP: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to verify OTP")
+
+
 @app.post("/api/advisory", response_model=AdvisoryResponse)
 async def get_advisory(payload: AdvisoryRequest):
     """Get comprehensive farm advisory from all agents"""
@@ -182,6 +275,21 @@ async def quick_advisory(payload: AdvisoryRequest):
         unified_plan = []
         for rec in sorted(agent_outputs, key=lambda r: r.priority, reverse=True):
             unified_plan.extend(rec.tasks[:2])  # Top 2 tasks per agent
+        
+        # Apply language translation if requested
+        if payload.language != "en":
+            # Import coordinator for translation
+            from .coordination.coordinator import AdvisoryCoordinator
+            coordinator = AdvisoryCoordinator()
+            
+            # Translate unified plan
+            unified_plan = [coordinator._translate_text(task, payload.language) for task in unified_plan]
+            
+            # Translate agent outputs
+            for rec in agent_outputs:
+                rec.summary = coordinator._translate_text(rec.summary, payload.language)
+                rec.explanation = coordinator._translate_text(rec.explanation, payload.language)
+                rec.tasks = [coordinator._translate_text(task, payload.language) for task in rec.tasks]
         
         response_time = (time.time() - start_time) * 1000
         

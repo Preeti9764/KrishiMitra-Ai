@@ -40,6 +40,43 @@ class AdvisoryCoordinator:
             "finance_policy": self.finance_policy
         }
         
+        # Language translations for common terms
+        self.language_translations = {
+            "hi": {  # Hindi
+                "irrigation": "सिंचाई",
+                "fertilizer": "उर्वरक",
+                "pest": "कीट",
+                "market": "बाजार",
+                "weather_risk": "मौसम जोखिम",
+                "seed_crop": "बीज फसल",
+                "finance_policy": "वित्त नीति",
+                "high_priority": "उच्च प्राथमिकता",
+                "medium_priority": "मध्यम प्राथमिकता",
+                "low_priority": "कम प्राथमिकता",
+                "risk_level": "जोखिम स्तर",
+                "confidence": "विश्वास",
+                "recommendations": "सिफारिशें"
+            },
+            "pa": {  # Punjabi
+                "irrigation": "ਸਿੰਚਾਈ",
+                "fertilizer": "ਖਾਦ",
+                "pest": "ਕੀੜਾ",
+                "market": "ਬਾਜ਼ਾਰ",
+                "weather_risk": "ਮੌਸਮ ਜੋਖਮ",
+                "seed_crop": "ਬੀਜ ਫਸਲ",
+                "finance_policy": "ਵਿੱਤ ਨੀਤੀ"
+            },
+            "bn": {  # Bengali
+                "irrigation": "সেচ",
+                "fertilizer": "সার",
+                "pest": "পোকা",
+                "market": "বাজার",
+                "weather_risk": "আবহাওয়া ঝুঁকি",
+                "seed_crop": "বীজ ফসল",
+                "finance_policy": "অর্থনীতি নীতি"
+            }
+        }
+        
         # Conflict resolution rules
         self.conflict_rules = {
             "irrigation_fertilizer": {
@@ -58,6 +95,34 @@ class AdvisoryCoordinator:
                 "time_gap_days": 2
             }
         }
+
+    def _translate_text(self, text: str, language: str) -> str:
+        """Translate common terms to the specified language"""
+        if language == "en" or language not in self.language_translations:
+            return text
+        
+        translations = self.language_translations[language]
+        for english, translated in translations.items():
+            text = text.replace(english, translated)
+        
+        return text
+
+    def _translate_recommendation(self, recommendation: AgentRecommendation, language: str) -> AgentRecommendation:
+        """Translate recommendation text to specified language"""
+        if language == "en":
+            return recommendation
+        
+        # Create a copy to avoid modifying the original
+        translated_rec = recommendation.copy()
+        
+        # Translate summary and explanation
+        translated_rec.summary = self._translate_text(translated_rec.summary, language)
+        translated_rec.explanation = self._translate_text(translated_rec.explanation, language)
+        
+        # Translate tasks
+        translated_rec.tasks = [self._translate_text(task, language) for task in translated_rec.tasks]
+        
+        return translated_rec
 
     async def build_advisory_plan(self, request: AdvisoryRequest) -> AdvisoryResponse:
         """Build comprehensive advisory plan with all agents"""
@@ -82,8 +147,19 @@ class AdvisoryCoordinator:
         # Apply conflict resolution
         resolved_recommendations = self._resolve_conflicts(agent_outputs)
         
+        # Apply language translation if requested
+        if request.language != "en":
+            resolved_recommendations = [
+                self._translate_recommendation(rec, request.language) 
+                for rec in resolved_recommendations
+            ]
+        
         # Generate unified plan
         unified_plan = self._generate_unified_plan(resolved_recommendations, request)
+        
+        # Translate unified plan if needed
+        if request.language != "en":
+            unified_plan = [self._translate_text(task, request.language) for task in unified_plan]
         
         # Calculate overall confidence
         overall_confidence = self._calculate_overall_confidence(resolved_recommendations)

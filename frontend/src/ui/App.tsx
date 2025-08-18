@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import { Login } from './Login'
 
 type AdvisoryResponse = {
   farmer_id: string
@@ -32,10 +33,162 @@ type AdvisoryResponse = {
   response_time_ms?: number
 }
 
+type FarmerData = {
+  name: string
+  farmerId: string
+  phone: string
+}
+
 export const App: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [farmerData, setFarmerData] = useState<FarmerData | null>(null)
+  const [showLogin, setShowLogin] = useState(false)
+  const [route, setRoute] = useState<string>(() => window.location.hash || '#/')
+
+  useEffect(() => {
+    const onHashChange = () => setRoute(window.location.hash || '#/')
+    window.addEventListener('hashchange', onHashChange)
+    // Restore auth from storage
+    try {
+      const saved = localStorage.getItem('farmerAuth')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed?.isAuthenticated && parsed?.farmer) {
+          setIsAuthenticated(true)
+          setFarmerData(parsed.farmer)
+          setFormData(prev => ({ ...prev, farmerId: parsed.farmer.farmerId, name: parsed.farmer.name }))
+        }
+      }
+    } catch { }
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
   const [loading, setLoading] = useState(false)
   const [response, setResponse] = useState<AdvisoryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Language translations for UI elements
+  const translations = {
+    en: {
+      title: "Farm Advisory AI",
+      subtitle: "Multi-Agent AI System v2.0",
+      farmerProfile: "Farmer Profile",
+      sensorData: "Sensor Data & Conditions",
+      generateAdvisory: "Generate Advisory",
+      clear: "Clear",
+      logout: "Logout",
+      login: "Login",
+      farmerId: "Farmer ID",
+      name: "Name",
+      latitude: "Latitude",
+      longitude: "Longitude",
+      district: "District",
+      state: "State",
+      farmSize: "Farm Size (ha)",
+      crop: "Crop",
+      growthStage: "Growth Stage",
+      soilType: "Soil Type",
+      soilMoisture: "Soil Moisture (%)",
+      soilTemperature: "Soil Temperature (°C)",
+      irrigationType: "Irrigation Type",
+      farmingPractice: "Farming Practice",
+      advisoryHorizon: "Advisory Horizon (days)",
+      languagePreference: "Language Preference",
+      confidence: "Confidence",
+      riskLevel: "Risk Level",
+      agentsActive: "Agents Active",
+      responseTime: "Response Time"
+    },
+    hi: {
+      title: "फार्म सलाहकार AI",
+      subtitle: "मल्टी-एजेंट AI सिस्टम v2.0",
+      farmerProfile: "किसान प्रोफाइल",
+      sensorData: "सेंसर डेटा और स्थितियां",
+      generateAdvisory: "सलाह उत्पन्न करें",
+      clear: "साफ़ करें",
+      logout: "लॉगआउट",
+      login: "लॉगिन",
+      farmerId: "किसान ID",
+      name: "नाम",
+      latitude: "अक्षांश",
+      longitude: "देशांतर",
+      district: "जिला",
+      state: "राज्य",
+      farmSize: "खेत का आकार (हेक्टेयर)",
+      crop: "फसल",
+      growthStage: "विकास चरण",
+      soilType: "मिट्टी का प्रकार",
+      soilMoisture: "मिट्टी की नमी (%)",
+      soilTemperature: "मिट्टी का तापमान (°C)",
+      irrigationType: "सिंचाई का प्रकार",
+      farmingPractice: "खेती का तरीका",
+      advisoryHorizon: "सलाह क्षितिज (दिन)",
+      languagePreference: "भाषा वरीयता",
+      confidence: "विश्वास",
+      riskLevel: "जोखिम स्तर",
+      agentsActive: "सक्रिय एजेंट",
+      responseTime: "प्रतिक्रिया समय"
+    },
+    pa: {
+      title: "ਫਾਰਮ ਸਲਾਹਕਾਰ AI",
+      subtitle: "ਮਲਟੀ-ਏਜੰਟ AI ਸਿਸਟਮ v2.0",
+      farmerProfile: "ਕਿਸਾਨ ਪ੍ਰੋਫਾਈਲ",
+      sensorData: "ਸੈਂਸਰ ਡੇਟਾ ਅਤੇ ਸਥਿਤੀਆਂ",
+      generateAdvisory: "ਸਲਾਹ ਤਿਆਰ ਕਰੋ",
+      clear: "ਸਾਫ਼ ਕਰੋ",
+      logout: "ਲੌਗਆਊਟ",
+      login: "ਲੌਗਿਨ",
+      farmerId: "ਕਿਸਾਨ ID",
+      name: "ਨਾਮ",
+      latitude: "ਅਕਸ਼ਾਂਸ਼",
+      longitude: "ਦੇਸ਼ਾਂਤਰ",
+      district: "ਜ਼ਿਲ੍ਹਾ",
+      state: "ਰਾਜ",
+      farmSize: "ਖੇਤ ਦਾ ਆਕਾਰ (ਹੈਕਟੇਅਰ)",
+      crop: "ਫਸਲ",
+      growthStage: "ਵਿਕਾਸ ਪੜਾਅ",
+      soilType: "ਮਿੱਟੀ ਦਾ ਕਿਸਮ",
+      soilMoisture: "ਮਿੱਟੀ ਦੀ ਨਮੀ (%)",
+      soilTemperature: "ਮਿੱਟੀ ਦਾ ਤਾਪਮਾਨ (°C)",
+      irrigationType: "ਸਿੰਚਾਈ ਦਾ ਕਿਸਮ",
+      farmingPractice: "ਖੇਤੀਬਾੜੀ ਦਾ ਤਰੀਕਾ",
+      advisoryHorizon: "ਸਲਾਹ ਦਾ ਖੇਤਰ (ਦਿਨ)",
+      languagePreference: "ਭਾਸ਼ਾ ਤਰਜੀਹ",
+      confidence: "ਭਰੋਸਾ",
+      riskLevel: "ਜੋਖਮ ਦਾ ਪੱਧਰ",
+      agentsActive: "ਸਰਗਰਮ ਏਜੰਟ",
+      responseTime: "ਜਵਾਬ ਦਾ ਸਮਾਂ"
+    },
+    bn: {
+      title: "ফার্ম উপদেষ্টা AI",
+      subtitle: "মাল্টি-এজেন্ট AI সিস্টেম v2.0",
+      farmerProfile: "কৃষক প্রোফাইল",
+      sensorData: "সেন্সর ডেটা এবং অবস্থা",
+      generateAdvisory: "পরামর্শ তৈরি করুন",
+      clear: "মুছুন",
+      logout: "লগআউট",
+      login: "লগইন",
+      farmerId: "কৃষক ID",
+      name: "নাম",
+      latitude: "অক্ষাংশ",
+      longitude: "দ্রাঘিমাংশ",
+      district: "জেলা",
+      state: "রাজ্য",
+      farmSize: "খামারের আকার (হেক্টর)",
+      crop: "ফসল",
+      growthStage: "বৃদ্ধির পর্যায়",
+      soilType: "মাটির ধরন",
+      soilMoisture: "মাটির আর্দ্রতা (%)",
+      soilTemperature: "মাটির তাপমাত্রা (°C)",
+      irrigationType: "সেচের ধরন",
+      farmingPractice: "চাষের পদ্ধতি",
+      advisoryHorizon: "পরামর্শের সময়সীমা (দিন)",
+      languagePreference: "ভাষার পছন্দ",
+      confidence: "আত্মবিশ্বাস",
+      riskLevel: "ঝুঁকির মাত্রা",
+      agentsActive: "সক্রিয় এজেন্ট",
+      responseTime: "প্রতিক্রিয়ার সময়"
+    }
+  }
 
   // Form state
   const [formData, setFormData] = useState({
@@ -56,6 +209,41 @@ export const App: React.FC = () => {
     horizon: 7,
     language: 'en'
   })
+
+  // Get current language translations
+  const currentLang = translations[formData.language as keyof typeof translations] || translations.en
+
+  const handleLogin = (data: FarmerData) => {
+    setFarmerData(data)
+    setIsAuthenticated(true)
+    setShowLogin(false)
+
+    // Update form data with logged-in farmer info
+    setFormData(prev => ({
+      ...prev,
+      farmerId: data.farmerId,
+      name: data.name
+    }))
+
+    // Clear any previous responses
+    setResponse(null)
+    setError(null)
+  }
+
+  const handleLogout = () => {
+    setIsAuthenticated(false)
+    setFarmerData(null)
+    setResponse(null)
+    setError(null)
+    try { localStorage.removeItem('farmerAuth') } catch { }
+
+    // Reset form to demo values
+    setFormData(prev => ({
+      ...prev,
+      farmerId: 'farmer_demo',
+      name: 'Ramesh Kumar'
+    }))
+  }
 
   const callApi = async () => {
     setLoading(true)
@@ -107,6 +295,27 @@ export const App: React.FC = () => {
 
   const updateFormData = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+
+    // If language is changed, clear the response to show new language
+    if (field === 'language') {
+      setResponse(null)
+      setError(null)
+
+      // Show language change notification
+      const languageNames = {
+        'en': 'English',
+        'hi': 'हिंदी (Hindi)',
+        'pa': 'ਪੰਜਾਬੀ (Punjabi)',
+        'bn': 'বাংলা (Bengali)',
+        'te': 'తెలుగు (Telugu)',
+        'ta': 'தமிழ் (Tamil)',
+        'mr': 'मराठी (Marathi)',
+        'gu': 'ગુજરાતી (Gujarati)'
+      }
+
+      const newLangName = languageNames[value as keyof typeof languageNames] || 'Unknown'
+      alert(`Language changed to: ${newLangName}`)
+    }
   }
 
   const getRiskColor = (risk: string) => {
@@ -138,6 +347,14 @@ export const App: React.FC = () => {
     return icons[agent] || '🤖'
   }
 
+  // Simple hash-based routing (/#/signup shows dedicated signup page)
+  if (route.startsWith('#/signup')) {
+    return <Login />
+  }
+  if (showLogin) {
+    return <Login onLogin={handleLogin} onBackToSignup={() => setShowLogin(false)} />
+  }
+
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -146,16 +363,55 @@ export const App: React.FC = () => {
           <div className="logo">
             <div className="logo-icon">🌾</div>
             <div>
-              <div className="title">Farm Advisory AI</div>
-              <div className="subtitle">Multi-Agent AI System v2.0</div>
+              <div className="title">{currentLang.title}</div>
+              <div className="subtitle">{currentLang.subtitle}</div>
             </div>
           </div>
 
           <div className="row">
+            {isAuthenticated ? (
+              <>
+                <div className="user-info" style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  marginRight: '16px',
+                  padding: '8px 16px',
+                  background: 'rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  color: 'white'
+                }}>
+                  <span>👤 {farmerData?.name}</span>
+                  <span style={{ fontSize: '12px', opacity: 0.8 }}>{farmerData?.farmerId}</span>
+                </div>
+                <button
+                  className="btn secondary"
+                  onClick={handleLogout}
+                >
+                  {currentLang.logout}
+                </button>
+              </>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className="btn"
+                  onClick={() => setShowLogin(true)}
+                >
+                  {currentLang.login}
+                </button>
+                <button
+                  className="btn secondary"
+                  onClick={() => { window.location.hash = '#/signup' }}
+                >
+                  Sign Up
+                </button>
+              </div>
+            )}
+
             <button
               className="btn"
               onClick={callApi}
-              disabled={loading}
+              disabled={loading || !isAuthenticated}
             >
               {loading ? (
                 <>
@@ -163,7 +419,7 @@ export const App: React.FC = () => {
                   Generating...
                 </>
               ) : (
-                'Generate Advisory'
+                currentLang.generateAdvisory
               )}
             </button>
             <button
@@ -171,68 +427,267 @@ export const App: React.FC = () => {
               onClick={() => setResponse(null)}
               disabled={loading}
             >
-              Clear
+              {currentLang.clear}
             </button>
           </div>
         </div>
       </header>
 
       <div className="container">
+        {/* Authentication Notice */}
+        {!isAuthenticated && (
+          <div className="panel" style={{
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+            border: '1px solid #f59e0b',
+            marginBottom: '24px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '24px' }}>🔐</span>
+              <div>
+                <h3 style={{ margin: '0 0 8px 0', color: '#92400e' }}>Authentication Required</h3>
+                <p style={{ margin: 0, color: '#92400e', fontSize: '14px' }}>
+                  Please login to access personalized farm advisory services. You can use either your Farmer ID and password, or sign up with your name and phone number.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Form */}
         <div className="grid">
           {/* Farmer Profile */}
           <div className="panel">
-            <h3 className="title" style={{ fontSize: '18px', marginBottom: '16px' }}>🌱 Farmer Profile</h3>
+            <h3 className="title" style={{ fontSize: '18px', marginBottom: '16px' }}>{currentLang.farmerProfile}</h3>
 
             <div className="grid" style={{ gap: '16px' }}>
               <div className="row">
                 <div className="field grow">
-                  <label>Farmer ID</label>
+                  <label>{currentLang.farmerId}</label>
                   <input
                     value={formData.farmerId}
                     onChange={(e) => updateFormData('farmerId', e.target.value)}
+                    disabled={isAuthenticated}
+                    style={{
+                      backgroundColor: isAuthenticated ? '#f3f4f6' : 'white',
+                      cursor: isAuthenticated ? 'not-allowed' : 'text'
+                    }}
                   />
+                  {isAuthenticated && (
+                    <small style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                      🔒 Locked after login
+                    </small>
+                  )}
                 </div>
                 <div className="field grow">
-                  <label>Name</label>
+                  <label>{currentLang.name}</label>
                   <input
                     value={formData.name}
                     onChange={(e) => updateFormData('name', e.target.value)}
+                    disabled={isAuthenticated}
+                    style={{
+                      backgroundColor: isAuthenticated ? '#f3f4f6' : 'white',
+                      cursor: isAuthenticated ? 'not-allowed' : 'text'
+                    }}
                   />
+                  {isAuthenticated && (
+                    <small style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                      🔒 Locked after login
+                    </small>
+                  )}
                 </div>
               </div>
 
+
+
               <div className="row">
                 <div className="field grow">
-                  <label>Latitude</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={formData.lat}
-                    onChange={(e) => updateFormData('lat', parseFloat(e.target.value))}
-                  />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {currentLang.latitude}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const infoBox = document.querySelector('.coordinate-info-box') as HTMLElement;
+                        if (infoBox) {
+                          infoBox.style.display = infoBox.style.display === 'none' ? 'block' : 'none';
+                        }
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--primary)',
+                        fontSize: '16px',
+                        cursor: 'pointer',
+                        padding: '0',
+                        width: '20px',
+                        height: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      title="How to get coordinates?"
+                    >
+                      ?
+                    </button>
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={formData.lat}
+                      onChange={(e) => updateFormData('lat', parseFloat(e.target.value))}
+                      placeholder="e.g., 28.6"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (navigator.geolocation) {
+                          navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                              updateFormData('lat', position.coords.latitude);
+                              updateFormData('lon', position.coords.longitude);
+                              alert('Location detected! Please verify the coordinates match your farm location.');
+                            },
+                            (error) => {
+                              alert('Could not get location. Please use manual methods from the toolkit above.');
+                            }
+                          );
+                        } else {
+                          alert('Geolocation not supported. Please use manual methods from the toolkit above.');
+                        }
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'var(--primary)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '4px 8px',
+                        fontSize: '11px',
+                        cursor: 'pointer'
+                      }}
+                      title="Get current location"
+                    >
+                      📍
+                    </button>
+                  </div>
+                  <small style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                    Example: 28.6 (North of equator)
+                  </small>
                 </div>
                 <div className="field grow">
-                  <label>Longitude</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {currentLang.longitude}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const infoBox = document.querySelector('.coordinate-info-box') as HTMLElement;
+                        if (infoBox) {
+                          infoBox.style.display = infoBox.style.display === 'none' ? 'block' : 'none';
+                        }
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--primary)',
+                        fontSize: '16px',
+                        cursor: 'pointer',
+                        padding: '0',
+                        width: '20px',
+                        height: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      title="How to get coordinates?"
+                    >
+                      ?
+                    </button>
+                  </label>
                   <input
                     type="number"
                     step="0.1"
                     value={formData.lon}
                     onChange={(e) => updateFormData('lon', parseFloat(e.target.value))}
+                    placeholder="e.g., 77.2"
                   />
+                  <small style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                    Example: 77.2 (East of prime meridian)
+                  </small>
+                </div>
+              </div>
+
+              {/* Compact Coordinate Info Box */}
+              <div className="coordinate-info-box" style={{
+                display: 'none',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '8px',
+                padding: '12px',
+                marginTop: '8px',
+                color: 'white',
+                border: '1px solid rgba(255,255,255,0.2)',
+                fontSize: '13px',
+                lineHeight: '1.4'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <strong style={{ fontSize: '14px' }}>📍 Quick Coordinate Guide</strong>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const infoBox = document.querySelector('.coordinate-info-box') as HTMLElement;
+                      if (infoBox) {
+                        infoBox.style.display = 'none';
+                      }
+                    }}
+                    style={{
+                      background: 'rgba(255,255,255,0.2)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      fontSize: '10px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>🌐 Google Maps:</strong> Long press on farm location → Copy coordinates
+                </div>
+
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>📱 GPS App:</strong> Download "GPS Coordinates" → Go to farm → Get coordinates
+                </div>
+
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>👨‍🌾 Extension Worker:</strong> Ask agricultural officer during farm visits
+                </div>
+
+                <div style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  padding: '6px 8px',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  border: '1px solid rgba(255,255,255,0.2)'
+                }}>
+                  <strong>💡 Tip:</strong> Use village center coordinates if exact farm coordinates aren't available!
                 </div>
               </div>
 
               <div className="row">
                 <div className="field grow">
-                  <label>District</label>
+                  <label>{currentLang.district}</label>
                   <input
                     value={formData.district}
                     onChange={(e) => updateFormData('district', e.target.value)}
                   />
                 </div>
                 <div className="field grow">
-                  <label>State</label>
+                  <label>{currentLang.state}</label>
                   <input
                     value={formData.state}
                     onChange={(e) => updateFormData('state', e.target.value)}
@@ -242,7 +697,7 @@ export const App: React.FC = () => {
 
               <div className="row">
                 <div className="field grow">
-                  <label>Farm Size (ha)</label>
+                  <label>{currentLang.farmSize}</label>
                   <input
                     type="number"
                     step="0.1"
@@ -251,7 +706,7 @@ export const App: React.FC = () => {
                   />
                 </div>
                 <div className="field grow">
-                  <label>Crop</label>
+                  <label>{currentLang.crop}</label>
                   <select
                     value={formData.crop}
                     onChange={(e) => updateFormData('crop', e.target.value)}
@@ -270,7 +725,7 @@ export const App: React.FC = () => {
 
               <div className="row">
                 <div className="field grow">
-                  <label>Growth Stage</label>
+                  <label>{currentLang.growthStage}</label>
                   <select
                     value={formData.growthStage}
                     onChange={(e) => updateFormData('growthStage', e.target.value)}
@@ -287,7 +742,7 @@ export const App: React.FC = () => {
                   </select>
                 </div>
                 <div className="field grow">
-                  <label>Soil Type</label>
+                  <label>{currentLang.soilType}</label>
                   <select
                     value={formData.soilType}
                     onChange={(e) => updateFormData('soilType', e.target.value)}
@@ -306,12 +761,12 @@ export const App: React.FC = () => {
 
           {/* Sensor Data */}
           <div className="panel">
-            <h3 className="title" style={{ fontSize: '18px', marginBottom: '16px' }}>📊 Sensor Data & Conditions</h3>
+            <h3 className="title" style={{ fontSize: '18px', marginBottom: '16px' }}>{currentLang.sensorData}</h3>
 
             <div className="grid" style={{ gap: '16px' }}>
               <div className="row">
                 <div className="field grow">
-                  <label>Soil Moisture (%)</label>
+                  <label>{currentLang.soilMoisture}</label>
                   <input
                     type="number"
                     step="0.1"
@@ -320,7 +775,7 @@ export const App: React.FC = () => {
                   />
                 </div>
                 <div className="field grow">
-                  <label>Soil Temperature (°C)</label>
+                  <label>{currentLang.soilTemperature}</label>
                   <input
                     type="number"
                     step="0.1"
@@ -332,7 +787,7 @@ export const App: React.FC = () => {
 
               <div className="row">
                 <div className="field grow">
-                  <label>Irrigation Type</label>
+                  <label>{currentLang.irrigationType}</label>
                   <select
                     value={formData.irrigationType}
                     onChange={(e) => updateFormData('irrigationType', e.target.value)}
@@ -344,7 +799,7 @@ export const App: React.FC = () => {
                   </select>
                 </div>
                 <div className="field grow">
-                  <label>Farming Practice</label>
+                  <label>{currentLang.farmingPractice}</label>
                   <select
                     value={formData.farmingPractice}
                     onChange={(e) => updateFormData('farmingPractice', e.target.value)}
@@ -356,15 +811,33 @@ export const App: React.FC = () => {
                 </div>
               </div>
 
-              <div className="field">
-                <label>Advisory Horizon (days)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="30"
-                  value={formData.horizon}
-                  onChange={(e) => updateFormData('horizon', parseInt(e.target.value))}
-                />
+              <div className="row">
+                <div className="field grow">
+                  <label>{currentLang.advisoryHorizon}</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="30"
+                    value={formData.horizon}
+                    onChange={(e) => updateFormData('horizon', parseInt(e.target.value))}
+                  />
+                </div>
+                <div className="field grow">
+                  <label>{currentLang.languagePreference}</label>
+                  <select
+                    value={formData.language}
+                    onChange={(e) => updateFormData('language', e.target.value)}
+                  >
+                    <option value="en">English</option>
+                    <option value="hi">हिंदी (Hindi)</option>
+                    <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
+                    <option value="bn">বাংলা (Bengali)</option>
+                    <option value="te">తెలుగు (Telugu)</option>
+                    <option value="ta">தமிழ் (Tamil)</option>
+                    <option value="mr">मराठी (Marathi)</option>
+                    <option value="gu">ગુજરાતી (Gujarati)</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -387,19 +860,19 @@ export const App: React.FC = () => {
             <div className="kpis">
               <div className="kpi">
                 <div className="v">{(response.confidence_overall * 100).toFixed(1)}%</div>
-                <div className="l">Confidence</div>
+                <div className="l">{currentLang.confidence}</div>
               </div>
               <div className="kpi">
                 <div className="v" style={{ textTransform: 'capitalize' }}>{response.risk_assessment.overall_risk_level}</div>
-                <div className="l">Risk Level</div>
+                <div className="l">{currentLang.riskLevel}</div>
               </div>
               <div className="kpi">
                 <div className="v">{response.recommendations.length}</div>
-                <div className="l">Agents Active</div>
+                <div className="l">{currentLang.agentsActive}</div>
               </div>
               <div className="kpi">
                 <div className="v">{response.response_time_ms ? Math.round(response.response_time_ms) : 'N/A'}ms</div>
-                <div className="l">Response Time</div>
+                <div className="l">{currentLang.responseTime}</div>
               </div>
             </div>
 

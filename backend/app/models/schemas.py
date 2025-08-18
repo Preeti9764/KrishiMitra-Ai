@@ -145,3 +145,32 @@ class SystemHealth(BaseModel):
     uptime_percentage: float
 
 
+
+# ===== Authentication & OTP Schemas =====
+class SendOtpRequest(BaseModel):
+    """Request to send an OTP to a phone number."""
+    phone: str = Field(..., description="Phone number in local or E.164 format")
+    name: Optional[str] = Field(None, description="Name to associate with this phone, if new user")
+
+
+class SendOtpResponse(BaseModel):
+    """Response for OTP send request."""
+    success: bool
+    message: str
+    expires_at: Optional[datetime] = None
+    dev_code: Optional[str] = None  # Provided only in dev for testing
+
+
+class VerifyOtpRequest(BaseModel):
+    """Request to verify an OTP for a phone number."""
+    phone: str
+    otp: str
+
+
+class VerifyOtpResponse(BaseModel):
+    """Response for OTP verification containing farmer profile binding."""
+    success: bool
+    message: str
+    farmer_id: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
