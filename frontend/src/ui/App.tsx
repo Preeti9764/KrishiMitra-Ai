@@ -124,7 +124,7 @@ export const App: React.FC = () => {
   // Language translations for UI elements
   const translations = {
     en: {
-      title: 'Farm Advisory AI',
+      title: 'KrishiMitra AI',
       subtitle: 'Multi-Agent AI System v2.0',
       farmerProfile: 'Farmer Profile',
       sensorData: 'Sensor Data & Conditions',

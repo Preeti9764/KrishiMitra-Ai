@@ -150,7 +150,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBackToSignup }) => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="text-6xl mb-4">🌾</div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Farm Advisory AI</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">KrishiMitra AI</h1>
           <p className="text-gray-600">Login to access your personalized farm recommendations</p>
         </div>
 

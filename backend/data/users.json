@@ -17,7 +17,7 @@
         "irrigation_type": "drip",
         "farming_practice": "conventional"
       },
-      "updated_at": "2025-08-18T21:27:54.921802"
+      "updated_at": "2025-08-18T21:40:55.910233"
     },
     "farmer_1755528469": {
       "farmer_id": "farmer_1755528469",
@@ -55,7 +55,7 @@
         "irrigation_type": "drip",
         "farming_practice": "conventional"
       },
-      "updated_at": "2025-08-18T21:27:54.958675"
+      "updated_at": "2025-08-18T21:40:55.892774"
     },
     "234567": {
       "farmer_id": "234567",
@@ -74,13 +74,13 @@
         "irrigation_type": "drip",
         "farming_practice": "conventional"
       },
-      "updated_at": "2025-08-18T21:27:54.225407"
+      "updated_at": "2025-08-18T21:40:55.214358"
     },
     "farmer_1755532709": {
       "farmer_id": "farmer_1755532709",
       "created_at": "2025-08-18T21:28:29.289776",
       "phone_e164": "+917262922007",
-      "updated_at": "2025-08-18T21:28:29.462013",
+      "updated_at": "2025-08-18T21:40:55.910233",
       "name": "Anshuman Das",
       "profile": {
         "farmer_id": "farmer_1755532709",
