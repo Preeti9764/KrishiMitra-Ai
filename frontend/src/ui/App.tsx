@@ -622,10 +622,10 @@ export const App: React.FC = () => {
                           alert('Geolocation not supported. Please use manual methods from the guide.');
                         }
                       }}
-                      style={{ position: 'absolute',right: '2px', top: '50%', transform: 'translateY(-50%)' }}
+                      style={{ position: 'absolute', right: '2px', top: '50%', transform: 'translateY(-50%)' }}
                       title="Use my location"
                     >
-                      📍 
+                      📍
                     </button>
                   </div>
                   <small style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px', display: 'block' }}>
