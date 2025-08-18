@@ -8,7 +8,7 @@ type LoginProps = {
 export const Login: React.FC<LoginProps> = ({ onLogin, onBackToSignup }) => {
   const [step, setStep] = useState<'login' | 'otp'>('login')
   const [loginMethod, setLoginMethod] = useState<'farmerId' | 'phone'>('farmerId')
-  const API_BASE = 'http://localhost:8000'
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
   // Login with Farmer ID
   const [farmerId, setFarmerId] = useState('')
@@ -36,7 +36,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBackToSignup }) => {
         // Try to hydrate from backend store if it exists
         let resolvedName = 'Farmer'
         try {
-          const res = await fetch(`http://localhost:8000/api/user/by-id/${encodeURIComponent(farmerId)}`)
+          const res = await fetch(`${API_BASE}/api/user/by-id/${encodeURIComponent(farmerId)}`)
           if (res.ok) {
             const rec = await res.json()
             resolvedName = rec?.name || rec?.profile?.name || resolvedName

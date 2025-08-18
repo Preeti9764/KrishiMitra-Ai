@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { Login } from './Login'
-import { DiseaseScan } from './DiseaseScan'
 import { Chatbot } from './Chatbot'
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
 // Types
 type AdvisoryResponse = {
@@ -61,7 +62,7 @@ export const App: React.FC = () => {
           setFarmerData(parsed.farmer)
           setFormData(prev => ({ ...prev, farmerId: parsed.farmer.farmerId, name: parsed.farmer.name }))
           // Also hydrate from backend if record exists
-          fetch(`http://localhost:8000/api/user/by-id/${encodeURIComponent(parsed.farmer.farmerId)}`)
+          fetch(`${API_BASE}/api/user/by-id/${encodeURIComponent(parsed.farmer.farmerId)}`)
             .then(async (res) => {
               if (!res.ok) return
               const rec = await res.json()
@@ -343,7 +344,7 @@ export const App: React.FC = () => {
     setError(null)
 
     // Hydrate from backend store if available
-    fetch(`http://localhost:8000/api/user/by-id/${encodeURIComponent(data.farmerId)}`)
+    fetch(`${API_BASE}/api/user/by-id/${encodeURIComponent(data.farmerId)}`)
       .then(async (res) => {
         if (!res.ok) return
         const rec = await res.json()
@@ -423,7 +424,7 @@ export const App: React.FC = () => {
         language: current.language
       }
 
-      const res = await fetch('http://localhost:8000/api/advisory', {
+      const res = await fetch(`${API_BASE}/api/advisory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -494,9 +495,6 @@ export const App: React.FC = () => {
   if (route.startsWith('#/signup')) {
     return <Login />
   }
-  if (route.startsWith('#/disease')) {
-    return <DiseaseScan defaultLanguage={formData.language} />
-  }
   if (route.startsWith('#/chat')) {
     return <Chatbot defaultLanguage={formData.language} />
   }
@@ -540,7 +538,6 @@ export const App: React.FC = () => {
               {loading ? (<><span className="loading"></span>Generating...</>) : (currentLang.generateAdvisory)}
             </button>
             <button className="btn secondary" onClick={() => setResponse(null)} disabled={loading}>{currentLang.clear}</button>
-            <button className="btn secondary" onClick={() => { window.location.hash = '#/disease' }}>Disease Scan</button>
             <button className="btn secondary" onClick={() => { window.location.hash = '#/chat' }}>Chatbot</button>
           </div>
         </div>

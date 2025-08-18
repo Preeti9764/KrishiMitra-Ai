@@ -8,6 +8,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
+from dotenv import load_dotenv
+import json
+import base64
 
 from .models.schemas import (
     AdvisoryRequest,
@@ -28,6 +31,12 @@ try:
     from twilio.rest import Client as TwilioClient
 except Exception:
     TwilioClient = None  # type: ignore
+
+# Optional OpenAI client for chatbot fallback
+try:
+    from openai import OpenAI as _OpenAIClient  # type: ignore
+except Exception:
+    _OpenAIClient = None  # type: ignore
 
 
 def _normalize_indian(num: str) -> tuple[str, str]:
@@ -119,6 +128,17 @@ app = FastAPI(
     version="2.0.0",
     description="Enhanced farm advisory system with 7 specialized AI agents"
 )
+
+# Load environment variables from .env next to this file (robust to CWD)
+_loaded_local = False
+try:
+    _ENV_PATH = Path(__file__).resolve().parent / ".env"
+    _loaded_local = load_dotenv(dotenv_path=_ENV_PATH)
+except Exception:
+    _loaded_local = False
+if not _loaded_local:
+    # Fallback: load .env from current working directory
+    load_dotenv()
 
 # Allow local dev frontends by default
 app.add_middleware(
@@ -672,16 +692,87 @@ async def diagnose_disease(
     image: UploadFile = File(...),
 ):
     try:
-        content = await image.read()
-        result = _analyze_leaf_image(content)
+        if not _OpenAIClient:
+            raise HTTPException(status_code=500, detail="OpenAI client not available on server")
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
 
-        # Translate suggestions if needed
+        # Read and downscale image to reduce payload size
+        content = await image.read()
+        try:
+            from PIL import Image as _PILImage  # type: ignore
+            import io as _io
+            with _PILImage.open(_io.BytesIO(content)) as _img:
+                _img = _img.convert("RGB")
+                _img.thumbnail((1024, 1024))
+                _buf = _io.BytesIO()
+                _img.save(_buf, format="JPEG", quality=85)
+                content = _buf.getvalue()
+            ctype = "image/jpeg"
+        except Exception:
+            ctype = image.content_type or "image/jpeg"
+
+        b64 = base64.b64encode(content).decode("utf-8")
+
+        client = _OpenAIClient(api_key=api_key)
+        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+        sys = (
+            "You are an expert agronomist. Analyze leaf images for crop diseases. "
+            "Be practical and safe. Respond ONLY in valid JSON with keys: "
+            "disease (snake_case), confidence (0..1), reasons (list of strings), suggestions (list of strings). "
+            "Use the user's requested language for reasons and suggestions."
+        )
+        user_text = (
+            f"Language={language}. Crop={crop}. "
+            "Identify likely disease and give actionable suggestions."
+        )
+        messages = [
+            {"role": "system", "content": sys},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_text},
+                    {"type": "image_url", "image_url": {"url": f"data:{ctype};base64,{b64}"}},
+                ],
+            },
+        ]
+        try:
+            comp = client.chat.completions.create(
+                model=model,
+                messages=messages,  # type: ignore[arg-type]
+                temperature=0.2,
+                max_tokens=400,
+            )
+            raw = (comp.choices[0].message.content or "").strip()
+        except Exception as oai_exc:
+            print(f"OpenAI vision call failed: {oai_exc}")
+            raw = "{\n  \"disease\": \"unknown\",\n  \"confidence\": 0.0,\n  \"reasons\": [],\n  \"suggestions\": [\"Unable to analyze image right now. Please try again.\"]\n}"
+
+        parsed = None
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            import re
+            m = re.search(r"\{[\s\S]*\}", raw)
+            if m:
+                parsed = json.loads(m.group(0))
+
+        if not isinstance(parsed, dict):
+            parsed = {"disease": "unknown", "confidence": 0.0, "reasons": [], "suggestions": ["Could not parse AI response."]}
+
+        result = {
+            "disease": str(parsed.get("disease") or "unknown"),
+            "confidence": float(parsed.get("confidence") or 0.0),
+            "stats": {"reasons": parsed.get("reasons") or []},
+            "suggestions": parsed.get("suggestions") or [],
+        }
+
+        # Translate to requested language if necessary
         if language != "en":
             try:
-                result["suggestions"] = [
-                    coordinator._translate_text(s, language) for s in (result.get("suggestions") or [])
-                ]
-                # Also translate the reasons within stats
+                result["suggestions"] = [coordinator._translate_text(s, language) for s in (result.get("suggestions") or [])]
                 stats = result.get("stats") or {}
                 reasons = stats.get("reasons") or []
                 stats["reasons"] = [coordinator._translate_text(r, language) for r in reasons]
@@ -689,10 +780,7 @@ async def diagnose_disease(
             except Exception:
                 pass
 
-        return {
-            "crop": crop,
-            **result,
-        }
+        return {"crop": crop, **result}
     except Exception as exc:
         print(f"Disease diagnose error: {exc}")
         raise HTTPException(status_code=500, detail="Failed to analyze image")
@@ -748,12 +836,12 @@ async def chat_endpoint(payload: ChatMessage) -> ChatResponse:
 
         # Route to specific agent when relevant, else provide general guidance
         reply_lines: List[str] = []
+        used_openai = False
         try:
             if topic in coordinator.agents:
                 agent = coordinator.agents[topic]
                 rec = await agent.recommend(minimal_request)
                 reply_lines.append(f"{rec.summary}")
-                # Include top tasks
                 for t in rec.tasks[:3]:
                     reply_lines.append(f"- {t}")
             else:
@@ -762,27 +850,57 @@ async def chat_endpoint(payload: ChatMessage) -> ChatResponse:
                 )
         except Exception as e:
             print(f"Chat agent error: {e}")
+            # Fall back to OpenAI if configured
+            api_key = os.getenv("OPENAI_API_KEY")
+            if _OpenAIClient and api_key:
+                try:
+                    client = _OpenAIClient(api_key=api_key)
+                    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+                    sys = (
+                        "You are an agricultural assistant for Indian farmers. "
+                        "Answer clearly, practically, and safely. Keep it concise. "
+                        "Always respond in the user's requested language."
+                    )
+                    user_ctx = []
+                    if payload.crop:
+                        user_ctx.append(f"crop={payload.crop}")
+                    if payload.state:
+                        user_ctx.append(f"state={payload.state}")
+                    if payload.district:
+                        user_ctx.append(f"district={payload.district}")
+                    if payload.irrigation_type:
+                        user_ctx.append(f"irrigation={payload.irrigation_type}")
+                    ctx_str = ("; ".join(user_ctx)) or "no extra context"
+                    messages = [
+                        {"role": "system", "content": sys},
+                        {"role": "user", "content": f"Language={language}. Context: {ctx_str}. Question: {text}"},
+                    ]
+                    comp = client.chat.completions.create(
+                        model=model,
+                        messages=messages,  # type: ignore[arg-type]
+                        temperature=0.3,
+                        max_tokens=400,
+                    )
+                    reply_text = (comp.choices[0].message.content or "").strip()
+                    used_openai = True
+                    return ChatResponse(reply=reply_text, topic=topic, language=language)
+                except Exception as ee:
+                    print(f"OpenAI fallback failed: {ee}")
+            # If OpenAI not available or failed, keep a graceful message
             reply_lines.append("Sorry, I could not fetch expert advice right now.")
 
-        # Add small note based on user question
-        if text:
-            reply_lines.append("")
-            reply_lines.append(f"Question understood (approx.): '{text[:120]}'")
-
-        reply_text = "\n".join(reply_lines).strip()
-
-        # Translate to target language if needed
-        if language != "en":
-            try:
-                reply_text = coordinator._translate_text(reply_text, language)
-            except Exception:
-                pass
-
-        return ChatResponse(
-            reply=reply_text,
-            topic=topic,
-            language=language,
-        )
+        # If OpenAI wasn't used, finalize rule-based reply
+        if not used_openai:
+            if text:
+                reply_lines.append("")
+                reply_lines.append(f"Question understood (approx.): '{text[:120]}'")
+            reply_text = "\n".join(reply_lines).strip()
+            if language != "en":
+                try:
+                    reply_text = coordinator._translate_text(reply_text, language)
+                except Exception:
+                    pass
+            return ChatResponse(reply=reply_text, topic=topic, language=language)
     except HTTPException:
         raise
     except Exception as exc:

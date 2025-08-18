@@ -1,5 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react'
 
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+
 type Props = {
   defaultLanguage?: string
 }
@@ -40,7 +42,7 @@ export const Chatbot: React.FC<Props> = ({ defaultLanguage = 'en' }) => {
       }
       if (ctx?.farmerId) payload.farmer_id = ctx.farmerId
       if (ctx?.name) payload.name = ctx.name
-      const res = await fetch('http://localhost:8000/api/chat', {
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

@@ -13,4 +13,5 @@ python-dateutil
 pytz
 twilio
 pillow
+openai>=1.0.0
 

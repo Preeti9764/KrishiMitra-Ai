@@ -1,0 +1,104 @@
+{
+  "farmers": {
+    "Anshuman": {
+      "farmer_id": "Anshuman",
+      "created_at": "2025-08-18T19:08:55.003449",
+      "profile": {
+        "farmer_id": "Anshuman",
+        "name": "Farmer",
+        "location_lat": 28.6,
+        "location_lon": 77.2,
+        "district": "Gurgaon",
+        "state": "Haryana",
+        "farm_size_hectares": 2.0,
+        "crop": "wheat",
+        "growth_stage": "tillering",
+        "soil_type": "loam",
+        "irrigation_type": "drip",
+        "farming_practice": "conventional"
+      },
+      "updated_at": "2025-08-18T21:27:54.921802"
+    },
+    "farmer_1755528469": {
+      "farmer_id": "farmer_1755528469",
+      "created_at": "2025-08-18T21:07:04.924220",
+      "profile": {
+        "farmer_id": "farmer_1755528469",
+        "name": "Anshuman Das",
+        "location_lat": 28.6,
+        "location_lon": 77.2,
+        "district": "Gurgaon",
+        "state": "Haryana",
+        "farm_size_hectares": 2.0,
+        "crop": "wheat",
+        "growth_stage": "tillering",
+        "soil_type": "loam",
+        "irrigation_type": "drip",
+        "farming_practice": "conventional"
+      },
+      "updated_at": "2025-08-18T21:13:31.706237"
+    },
+    "w53": {
+      "farmer_id": "w53",
+      "created_at": "2025-08-18T21:14:35.819255",
+      "profile": {
+        "farmer_id": "w53",
+        "name": "Farmer",
+        "location_lat": 28.6,
+        "location_lon": 77.2,
+        "district": "Gurgaon",
+        "state": "Haryana",
+        "farm_size_hectares": 2.0,
+        "crop": "wheat",
+        "growth_stage": "tillering",
+        "soil_type": "loam",
+        "irrigation_type": "drip",
+        "farming_practice": "conventional"
+      },
+      "updated_at": "2025-08-18T21:27:54.958675"
+    },
+    "234567": {
+      "farmer_id": "234567",
+      "created_at": "2025-08-18T21:26:42.986715",
+      "profile": {
+        "farmer_id": "234567",
+        "name": "Farmer",
+        "location_lat": 28.6,
+        "location_lon": 77.2,
+        "district": "Gurgaon",
+        "state": "Haryana",
+        "farm_size_hectares": 2.0,
+        "crop": "wheat",
+        "growth_stage": "tillering",
+        "soil_type": "loam",
+        "irrigation_type": "drip",
+        "farming_practice": "conventional"
+      },
+      "updated_at": "2025-08-18T21:27:54.225407"
+    },
+    "farmer_1755532709": {
+      "farmer_id": "farmer_1755532709",
+      "created_at": "2025-08-18T21:28:29.289776",
+      "phone_e164": "+917262922007",
+      "updated_at": "2025-08-18T21:28:29.462013",
+      "name": "Anshuman Das",
+      "profile": {
+        "farmer_id": "farmer_1755532709",
+        "name": "Anshuman Das",
+        "location_lat": 28.6,
+        "location_lon": 77.2,
+        "district": "Gurgaon",
+        "state": "Haryana",
+        "farm_size_hectares": 2.0,
+        "crop": "wheat",
+        "growth_stage": "tillering",
+        "soil_type": "loam",
+        "irrigation_type": "drip",
+        "farming_practice": "conventional"
+      }
+    }
+  },
+  "phone_to_farmer": {
+    "+917262922007": "farmer_1755532709"
+  }
+}
