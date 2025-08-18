@@ -57,14 +57,65 @@ export const App: React.FC = () => {
           setIsAuthenticated(true)
           setFarmerData(parsed.farmer)
           setFormData(prev => ({ ...prev, farmerId: parsed.farmer.farmerId, name: parsed.farmer.name }))
+          // Also hydrate from backend if record exists
+          fetch(`http://localhost:8000/api/user/by-id/${encodeURIComponent(parsed.farmer.farmerId)}`)
+            .then(async (res) => {
+              if (!res.ok) return
+              const rec = await res.json()
+              const p = rec.profile || {}
+              setFormData(prev => ({
+                ...prev,
+                farmerId: rec.farmer_id || prev.farmerId,
+                name: rec.name || p.name || prev.name,
+                lat: typeof p.location_lat === 'number' ? p.location_lat : prev.lat,
+                lon: typeof p.location_lon === 'number' ? p.location_lon : prev.lon,
+                district: p.district || prev.district,
+                state: p.state || prev.state,
+                farmSize: typeof p.farm_size_hectares === 'number' ? p.farm_size_hectares : prev.farmSize,
+                crop: p.crop || prev.crop,
+                growthStage: p.growth_stage || prev.growthStage,
+                soilType: p.soil_type || prev.soilType,
+                irrigationType: p.irrigation_type || prev.irrigationType,
+                farmingPractice: p.farming_practice || prev.farmingPractice,
+              }))
+            })
+            .catch(() => { })
         }
       }
     } catch { }
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
+
+  // When route changes (e.g., after signup redirect), re-check localStorage auth
+  useEffect(() => {
+    try {
+      if (!isAuthenticated) {
+        const saved = localStorage.getItem('farmerAuth')
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (parsed?.isAuthenticated && parsed?.farmer) {
+            setIsAuthenticated(true)
+            setFarmerData(parsed.farmer)
+            setFormData(prev => ({ ...prev, farmerId: parsed.farmer.farmerId, name: parsed.farmer.name }))
+          }
+        }
+      }
+    } catch { }
+  }, [route])
   const [loading, setLoading] = useState(false)
   const [response, setResponse] = useState<AdvisoryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Auto-refresh advisory when language changes while authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      // debounce slightly to avoid double calls
+      const t = setTimeout(() => {
+        callApi()
+      }, 50)
+      return () => clearTimeout(t)
+    }
+  }, [isAuthenticated, /* re-run when language changes */])
 
   // Language translations for UI elements
   const translations = {
@@ -228,6 +279,30 @@ export const App: React.FC = () => {
     // Clear any previous responses
     setResponse(null)
     setError(null)
+
+    // Hydrate from backend store if available
+    fetch(`http://localhost:8000/api/user/by-id/${encodeURIComponent(data.farmerId)}`)
+      .then(async (res) => {
+        if (!res.ok) return
+        const rec = await res.json()
+        const p = rec.profile || {}
+        setFormData(prev => ({
+          ...prev,
+          farmerId: rec.farmer_id || prev.farmerId,
+          name: rec.name || p.name || prev.name,
+          lat: typeof p.location_lat === 'number' ? p.location_lat : prev.lat,
+          lon: typeof p.location_lon === 'number' ? p.location_lon : prev.lon,
+          district: p.district || prev.district,
+          state: p.state || prev.state,
+          farmSize: typeof p.farm_size_hectares === 'number' ? p.farm_size_hectares : prev.farmSize,
+          crop: p.crop || prev.crop,
+          growthStage: p.growth_stage || prev.growthStage,
+          soilType: p.soil_type || prev.soilType,
+          irrigationType: p.irrigation_type || prev.irrigationType,
+          farmingPractice: p.farming_practice || prev.farmingPractice,
+        }))
+      })
+      .catch(() => { })
   }
 
   const handleLogout = () => {
@@ -245,33 +320,34 @@ export const App: React.FC = () => {
     }))
   }
 
-  const callApi = async () => {
+  const callApi = async (overrides?: Partial<typeof formData>) => {
     setLoading(true)
     setError(null)
     setResponse(null)
 
     try {
+      const current = { ...formData, ...(overrides || {}) }
       const payload = {
         profile: {
-          farmer_id: formData.farmerId,
-          name: formData.name,
-          location_lat: formData.lat,
-          location_lon: formData.lon,
-          district: formData.district,
-          state: formData.state,
-          farm_size_hectares: formData.farmSize,
-          crop: formData.crop,
-          growth_stage: formData.growthStage,
-          soil_type: formData.soilType,
-          irrigation_type: formData.irrigationType,
-          farming_practice: formData.farmingPractice
+          farmer_id: current.farmerId,
+          name: current.name,
+          location_lat: current.lat,
+          location_lon: current.lon,
+          district: current.district,
+          state: current.state,
+          farm_size_hectares: current.farmSize,
+          crop: current.crop,
+          growth_stage: current.growthStage,
+          soil_type: current.soilType,
+          irrigation_type: current.irrigationType,
+          farming_practice: current.farmingPractice
         },
         sensors: {
-          soil_moisture_pct: formData.moisture,
-          soil_temperature_c: formData.soilTemp
+          soil_moisture_pct: current.moisture,
+          soil_temperature_c: current.soilTemp
         },
-        horizon_days: formData.horizon,
-        language: formData.language
+        horizon_days: current.horizon,
+        language: current.language
       }
 
       const res = await fetch('http://localhost:8000/api/advisory', {
@@ -300,6 +376,8 @@ export const App: React.FC = () => {
     if (field === 'language') {
       setResponse(null)
       setError(null)
+      // Immediately fetch advisory in selected language
+      callApi({ language: value })
 
       // Show language change notification
       const languageNames = {
@@ -410,7 +488,7 @@ export const App: React.FC = () => {
 
             <button
               className="btn"
-              onClick={callApi}
+              onClick={() => callApi()}
               disabled={loading || !isAuthenticated}
             >
               {loading ? (
@@ -505,31 +583,19 @@ export const App: React.FC = () => {
                     {currentLang.latitude}
                     <button
                       type="button"
+                      className="icon-btn"
                       onClick={() => {
                         const infoBox = document.querySelector('.coordinate-info-box') as HTMLElement;
                         if (infoBox) {
                           infoBox.style.display = infoBox.style.display === 'none' ? 'block' : 'none';
                         }
                       }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--primary)',
-                        fontSize: '16px',
-                        cursor: 'pointer',
-                        padding: '0',
-                        width: '20px',
-                        height: '20px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
                       title="How to get coordinates?"
                     >
                       ?
                     </button>
                   </label>
-                  <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'relative', paddingRight: '40px' }}>
                     <input
                       type="number"
                       step="0.1"
@@ -539,6 +605,7 @@ export const App: React.FC = () => {
                     />
                     <button
                       type="button"
+                      className="chip-btn"
                       onClick={() => {
                         if (navigator.geolocation) {
                           navigator.geolocation.getCurrentPosition(
@@ -547,30 +614,18 @@ export const App: React.FC = () => {
                               updateFormData('lon', position.coords.longitude);
                               alert('Location detected! Please verify the coordinates match your farm location.');
                             },
-                            (error) => {
-                              alert('Could not get location. Please use manual methods from the toolkit above.');
+                            () => {
+                              alert('Could not get location. Please use manual methods from the guide.');
                             }
                           );
                         } else {
-                          alert('Geolocation not supported. Please use manual methods from the toolkit above.');
+                          alert('Geolocation not supported. Please use manual methods from the guide.');
                         }
                       }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        background: 'var(--primary)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        padding: '4px 8px',
-                        fontSize: '11px',
-                        cursor: 'pointer'
-                      }}
-                      title="Get current location"
+                      style={{ position: 'absolute',right: '2px', top: '50%', transform: 'translateY(-50%)' }}
+                      title="Use my location"
                     >
-                      📍
+                      📍 
                     </button>
                   </div>
                   <small style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px', display: 'block' }}>
@@ -582,24 +637,12 @@ export const App: React.FC = () => {
                     {currentLang.longitude}
                     <button
                       type="button"
+                      className="icon-btn"
                       onClick={() => {
                         const infoBox = document.querySelector('.coordinate-info-box') as HTMLElement;
                         if (infoBox) {
                           infoBox.style.display = infoBox.style.display === 'none' ? 'block' : 'none';
                         }
-                      }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--primary)',
-                        fontSize: '16px',
-                        cursor: 'pointer',
-                        padding: '0',
-                        width: '20px',
-                        height: '20px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
                       }}
                       title="How to get coordinates?"
                     >
@@ -622,17 +665,18 @@ export const App: React.FC = () => {
               {/* Compact Coordinate Info Box */}
               <div className="coordinate-info-box" style={{
                 display: 'none',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: '#ffffff',
                 borderRadius: '8px',
                 padding: '12px',
                 marginTop: '8px',
-                color: 'white',
-                border: '1px solid rgba(255,255,255,0.2)',
+                color: 'var(--text)',
+                border: '1px solid var(--border)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
                 fontSize: '13px',
                 lineHeight: '1.4'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <strong style={{ fontSize: '14px' }}>📍 Quick Coordinate Guide</strong>
+                  <strong style={{ fontSize: '14px', color: 'var(--primary)' }}>📍 Quick Coordinate Guide</strong>
                   <button
                     type="button"
                     onClick={() => {
@@ -642,9 +686,9 @@ export const App: React.FC = () => {
                       }
                     }}
                     style={{
-                      background: 'rgba(255,255,255,0.2)',
-                      color: 'white',
-                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--muted)',
+                      border: '1px solid var(--border)',
                       borderRadius: '4px',
                       padding: '2px 6px',
                       fontSize: '10px',
@@ -668,11 +712,11 @@ export const App: React.FC = () => {
                 </div>
 
                 <div style={{
-                  background: 'rgba(255,255,255,0.1)',
+                  background: 'rgba(22,163,74,0.06)',
                   padding: '6px 8px',
                   borderRadius: '4px',
                   fontSize: '12px',
-                  border: '1px solid rgba(255,255,255,0.2)'
+                  border: '1px solid rgba(22,163,74,0.2)'
                 }}>
                   <strong>💡 Tip:</strong> Use village center coordinates if exact farm coordinates aren't available!
                 </div>

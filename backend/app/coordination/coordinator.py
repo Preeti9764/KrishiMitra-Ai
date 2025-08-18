@@ -1,4 +1,5 @@
 import asyncio
+import requests
 from typing import List, Dict, Any
 from datetime import datetime
 
@@ -96,16 +97,66 @@ class AdvisoryCoordinator:
             }
         }
 
+        # Cache to avoid repeated translation calls
+        self._translation_cache: Dict[str, Dict[str, str]] = {}
+        # Public LibreTranslate instances (best-effort; no API key required). We will try in order.
+        self._translation_endpoints = [
+            "https://libretranslate.com/translate",
+            "https://libretranslate.de/translate",
+        ]
+        # Map our language codes to ISO codes used by translators
+        self._lang_to_iso = {"hi": "hi", "pa": "pa", "bn": "bn"}
+
     def _translate_text(self, text: str, language: str) -> str:
-        """Translate common terms to the specified language"""
-        if language == "en" or language not in self.language_translations:
+        """Translate text.
+        Strategy:
+        1) Quick dictionary replacement for common domain terms
+        2) Attempt full-sentence translation via LibreTranslate (best-effort)
+        3) Fall back to dictionary output if API not available
+        Caches results to reduce network calls.
+        """
+        if not text or language == "en":
             return text
-        
-        translations = self.language_translations[language]
+
+        # If cached, return
+        if language in self._translation_cache and text in self._translation_cache[language]:
+            return self._translation_cache[language][text]
+
+        # Step 1: dictionary replacements
+        dictionary_output = text
+        translations = self.language_translations.get(language, {})
         for english, translated in translations.items():
-            text = text.replace(english, translated)
-        
-        return text
+            dictionary_output = dictionary_output.replace(english, translated)
+
+        # If we can, try full translation API for better quality
+        iso = self._lang_to_iso.get(language)
+        best_output = dictionary_output
+        if iso:
+            for endpoint in self._translation_endpoints:
+                try:
+                    resp = requests.post(
+                        endpoint,
+                        timeout=4,
+                        json={
+                            "q": text,
+                            "source": "en",
+                            "target": iso,
+                            "format": "text",
+                        },
+                    )
+                    if resp.ok:
+                        data = resp.json()
+                        api_txt = data.get("translatedText") or data.get("translated_text")
+                        if isinstance(api_txt, str) and len(api_txt) > 0:
+                            best_output = api_txt
+                            break
+                except Exception:
+                    # ignore and try next endpoint or fall back
+                    continue
+
+        # Cache and return
+        self._translation_cache.setdefault(language, {})[text] = best_output
+        return best_output
 
     def _translate_recommendation(self, recommendation: AgentRecommendation, language: str) -> AgentRecommendation:
         """Translate recommendation text to specified language"""

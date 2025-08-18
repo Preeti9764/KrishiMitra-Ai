@@ -8,8 +8,10 @@
   --panel: #ffffff;
   --text: #1f2937;
   --muted: #6b7280;
-  --primary: #3b82f6;
-  --primary-600: #2563eb;
+  --primary: #16a34a;
+  /* green-600 */
+  --primary-600: #15803d;
+  /* green-700 */
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
@@ -29,7 +31,7 @@ body,
 body {
   margin: 0;
   color: var(--text);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
   font-family: 'Inter', ui-sans-serif, system-ui, Segoe UI, Roboto, Arial, sans-serif;
 }
 
@@ -40,11 +42,12 @@ body {
 }
 
 .header {
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff;
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
   padding: 16px 0;
   margin-bottom: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .header-content {
@@ -65,7 +68,7 @@ body {
 .logo-icon {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -86,7 +89,7 @@ body {
 }
 
 .btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
   color: white;
   border: none;
   border-radius: 12px;
@@ -94,12 +97,12 @@ body {
   cursor: pointer;
   font-weight: 600;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
 }
 
 .btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
 }
 
 .btn:disabled {
@@ -118,6 +121,39 @@ body {
 .btn.secondary:hover {
   background: var(--bg);
   transform: translateY(-1px);
+}
+
+/* Small circular icon button (e.g., question mark) */
+.icon-btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--bg);
+}
+
+/* Small pill button (e.g., use my location) */
+.chip-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 9999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip-btn:hover {
+  opacity: 0.95;
 }
 
 .panel {
@@ -238,7 +274,7 @@ body {
 .plan li {
   padding: 12px 16px;
   margin-bottom: 8px;
-  background: rgba(59, 130, 246, 0.05);
+  background: rgba(22, 163, 74, 0.06);
   border-radius: 8px;
   border-left: 4px solid var(--primary);
   position: relative;
@@ -287,7 +323,7 @@ body {
 
 .kpi {
   background: rgba(59, 130, 246, 0.05);
-  border: 1px solid rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(22, 163, 74, 0.15);
   border-radius: 12px;
   padding: 16px;
   text-align: center;
@@ -316,6 +352,14 @@ body {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   animation: slideIn 0.3s ease-out;
+}
+
+.toast.success {
+  border-left: 4px solid var(--success);
+}
+
+.toast.error {
+  border-left: 4px solid var(--danger);
 }
 
 @keyframes slideIn {

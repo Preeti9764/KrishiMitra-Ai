@@ -33,7 +33,23 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBackToSignup }) => {
 
       // For demo purposes, accept any farmer ID with password "1234"
       if (password === '1234') {
-        onLogin({ name: 'Demo Farmer', farmerId, phone: '+91-9876543210' })
+        // Try to hydrate from backend store if it exists
+        let resolvedName = 'Farmer'
+        try {
+          const res = await fetch(`http://localhost:8000/api/user/by-id/${encodeURIComponent(farmerId)}`)
+          if (res.ok) {
+            const rec = await res.json()
+            resolvedName = rec?.name || rec?.profile?.name || resolvedName
+          }
+        } catch { }
+
+        const farmer = { name: resolvedName, farmerId, phone: '' }
+        try { localStorage.setItem('farmerAuth', JSON.stringify({ isAuthenticated: true, farmer })) } catch { }
+        if (onLogin) {
+          onLogin(farmer)
+        } else {
+          window.location.hash = '#/'
+        }
       } else {
         setError('Invalid farmer ID or password')
       }

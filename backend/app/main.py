@@ -1,8 +1,11 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+import os
+import requests
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 import time
 from datetime import datetime
+from pathlib import Path
 
 from .models.schemas import (
     AdvisoryRequest,
@@ -15,6 +18,96 @@ from .models.schemas import (
     VerifyOtpResponse,
 )
 from .coordination.coordinator import AdvisoryCoordinator
+from .storage.user_store import UserStore
+# Optional Twilio client for SMS (if env vars exist)
+try:
+    from twilio.rest import Client as TwilioClient
+except Exception:
+    TwilioClient = None  # type: ignore
+
+
+def _normalize_indian(num: str) -> tuple[str, str]:
+    """Return (e164, digits) for Indian mobile numbers.
+    e164: +91XXXXXXXXXX, digits: 91XXXXXXXXXX without plus.
+    """
+    n = (num or "").strip().replace(" ", "").replace("-", "")
+    if n.startswith("+91"):
+        return n, n[1:]
+    if n.startswith("0"):
+        n = n[1:]
+    if n.startswith("91") and len(n) == 12:
+        return "+" + n, n
+    if n.isdigit() and len(n) == 10:
+        return "+91" + n, "91" + n
+    # Fallback
+    return (n if n.startswith("+") else "+" + n), n.lstrip("+")
+
+
+def _send_sms_via_provider(phone: str, message: str, otp_code: str | None = None) -> bool:
+    """Send SMS via one of providers configured by env.
+    Supported: MSG91, Gupshup, Textlocal, Twilio (fallback)."""
+    provider = (os.getenv("SMS_PROVIDER") or "").lower().strip()
+    e164, digits = _normalize_indian(phone)
+
+    try:
+        if provider == "msg91":
+            authkey = os.getenv("MSG91_AUTHKEY")
+            sender = os.getenv("MSG91_SENDER")
+            flow_id = os.getenv("MSG91_FLOW_ID")
+            if authkey and sender:
+                headers = {"authkey": authkey, "Content-Type": "application/json"}
+                if flow_id:
+                    url = "https://api.msg91.com/api/v5/flow/"
+                    payload = {
+                        "flow_id": flow_id,
+                        "sender": sender,
+                        "recipients": [{
+                            "mobiles": digits,
+                            # Common variable names; your flow can map to either
+                            "OTP": otp_code or message,
+                            "TEXT": message
+                        }]
+                    }
+                else:
+                    url = "https://api.msg91.com/api/v2/sendsms"
+                    payload = {"sender": sender, "route": "4", "country": "91", "sms": [{"message": message, "to": [digits[-10:]]}]}
+                r = requests.post(url, json=payload, headers=headers, timeout=8)
+                if r.ok:
+                    return True
+
+        if provider == "gupshup":
+            api_key = os.getenv("GUPSHUP_API_KEY")
+            source = os.getenv("GUPSHUP_SOURCE")
+            if api_key and source:
+                url = "https://api.gupshup.io/sm/api/v1/msg"
+                headers = {"apikey": api_key, "Content-Type": "application/x-www-form-urlencoded"}
+                data = {"channel": "sms", "source": source, "destination": digits[-10:], "message": message}
+                r = requests.post(url, headers=headers, data=data, timeout=8)
+                if r.ok:
+                    return True
+
+        if provider == "textlocal":
+            api_key = os.getenv("TEXTLOCAL_API_KEY")
+            sender = os.getenv("TEXTLOCAL_SENDER")
+            if api_key and sender:
+                url = "https://api.textlocal.in/send/"
+                data = {"apikey": api_key, "numbers": digits, "sender": sender, "message": message}
+                r = requests.post(url, data=data, timeout=8)
+                if r.ok:
+                    return True
+
+        # Fallback to Twilio when configured
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        from_number = os.getenv("TWILIO_FROM_NUMBER")
+        if all([TwilioClient, account_sid, auth_token, from_number]):
+            client = TwilioClient(account_sid, auth_token)  # type: ignore
+            client.messages.create(body=message, from_=from_number, to=e164)
+            return True
+    except Exception as exc:
+        print(f"[SMS-ERROR] provider={provider} err={exc}")
+
+    return False
 
 
 app = FastAPI(
@@ -33,6 +126,7 @@ app.add_middleware(
 )
 
 coordinator = AdvisoryCoordinator()
+user_store = UserStore(Path(__file__).resolve().parent.parent / "data" / "users.json")
 
 # System startup time for uptime calculation
 startup_time = datetime.now()
@@ -137,6 +231,24 @@ def conflict_rules() -> dict:
     return coordinator.get_conflict_rules()
 
 
+@app.get("/api/user/by-id/{farmer_id}")
+def get_user_by_id(farmer_id: str) -> dict:
+    rec = user_store.get_by_farmer_id(farmer_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Farmer not found")
+    return rec
+
+
+@app.get("/api/user/by-phone/{phone}")
+def get_user_by_phone(phone: str) -> dict:
+    e164, _ = _normalize_indian(phone)
+    farmer_id = user_store.get_farmer_id_by_phone(e164)
+    if not farmer_id:
+        raise HTTPException(status_code=404, detail="No farmer mapped to this phone")
+    rec = user_store.get_by_farmer_id(farmer_id)
+    return rec or {"farmer_id": farmer_id}
+
+
 # ========== AUTH / OTP ENDPOINTS (MVP) ==========
 @app.post("/api/auth/send-otp", response_model=SendOtpResponse)
 def send_otp(payload: SendOtpRequest) -> SendOtpResponse:
@@ -158,11 +270,15 @@ def send_otp(payload: SendOtpRequest) -> SendOtpResponse:
         # If this is a new phone and name provided, tentatively store name (farmer id after verification)
         if payload.name:
             phone_to_farmer.setdefault(phone, {"farmer_id": None, "name": payload.name})
+            # Also persist a draft record to disk store without farmer_id yet
 
-        # Log for dev visibility (replace with SMS send)
-        print(f"[OTP] Phone={phone} Code={code} Expires={expires_at}")
+        # Try to send via configured provider (MSG91/Gupshup/Textlocal/Twilio)
+        sent_via_sms = _send_sms_via_provider(phone, f"Your Farm Advisory OTP is {code}. It expires in 5 minutes.")
 
-        return SendOtpResponse(success=True, message="OTP sent successfully", expires_at=expires_at, dev_code=code)
+        # Always log for dev visibility
+        print(f"[OTP] Phone={phone} Code={code} Expires={expires_at} SMS={sent_via_sms}")
+
+        return SendOtpResponse(success=True, message="OTP sent successfully", expires_at=expires_at, dev_code=(None if sent_via_sms else code))
     except HTTPException:
         raise
     except Exception as exc:
@@ -191,14 +307,29 @@ def verify_otp(payload: VerifyOtpRequest) -> VerifyOtpResponse:
 
         # OTP valid → bind or create farmer profile
         mapping = phone_to_farmer.get(phone)
+        e164, _digits = _normalize_indian(phone)
+        farmer_id = None
+        # Check persistent store first
+        existing_id = user_store.get_farmer_id_by_phone(e164)
+        if existing_id:
+            farmer_id = existing_id
+            mapping = mapping or {"farmer_id": existing_id, "name": None}
         if not mapping or not mapping.get("farmer_id"):
-            # Create a new farmer_id
-            new_id = f"farmer_{int(time.time())}"
+            farmer_id = farmer_id or f"farmer_{int(time.time())}"
             if not mapping:
-                mapping = {"farmer_id": new_id, "name": "Farmer"}
+                mapping = {"farmer_id": farmer_id, "name": "Farmer"}
             else:
-                mapping["farmer_id"] = new_id
+                mapping["farmer_id"] = farmer_id
             phone_to_farmer[phone] = mapping
+        else:
+            farmer_id = mapping["farmer_id"]
+
+        # Persist phone→farmer mapping and name
+        user_store.bind_phone(farmer_id, e164)
+        try:
+            user_store.upsert_farmer(farmer_id, name=mapping.get("name"), phone_e164=e164)
+        except Exception:
+            pass
 
         # Clean up used OTP
         del otp_store[phone]
@@ -206,7 +337,7 @@ def verify_otp(payload: VerifyOtpRequest) -> VerifyOtpResponse:
         return VerifyOtpResponse(
             success=True,
             message="OTP verified",
-            farmer_id=mapping["farmer_id"],
+            farmer_id=farmer_id,
             name=mapping.get("name"),
             phone=phone,
         )
@@ -230,6 +361,12 @@ async def get_advisory(payload: AdvisoryRequest):
         if not payload.profile.crop:
             raise HTTPException(status_code=400, detail="Crop type is required")
         
+        # Persist latest profile against farmer_id for future sessions
+        try:
+            user_store.save_profile(payload.profile.farmer_id, payload.profile.dict())
+        except Exception as _:
+            pass
+
         # Get advisory plan
         plan = await coordinator.build_advisory_plan(payload)
         
