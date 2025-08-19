@@ -105,7 +105,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Start the server
-uvicorn backend.app.main:app --reload --port 8000
+uvicorn backend.app.main:app --port 8001
 ```
 
 ### Frontend Setup
@@ -123,8 +123,8 @@ npm run dev -- --port 5173
 
 ### Access the Application
 - **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
+- **Backend API**: http://localhost:8001
+- **API Documentation**: http://localhost:8001/docs
 
 ## 📊 API Endpoints
 
@@ -148,7 +148,7 @@ npm run dev -- --port 5173
 
 ### Generate Advisory
 ```bash
-curl -X POST "http://localhost:8000/api/advisory" \
+curl -X POST "http://localhost:8001/api/advisory" \
   -H "Content-Type: application/json" \
   -d '{
     "profile": {

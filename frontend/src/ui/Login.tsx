@@ -8,7 +8,7 @@ type LoginProps = {
 export const Login: React.FC<LoginProps> = ({ onLogin, onBackToSignup }) => {
   const [step, setStep] = useState<'login' | 'otp'>('login')
   const [loginMethod, setLoginMethod] = useState<'farmerId' | 'phone'>('farmerId')
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001'
 
   // Login with Farmer ID
   const [farmerId, setFarmerId] = useState('')
@@ -150,7 +150,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBackToSignup }) => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="text-6xl mb-4">🌾</div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">KrishiMitra AI</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">🤖 KrishiBot</h1>
           <p className="text-gray-600">Login to access your personalized farm recommendations</p>
         </div>
 

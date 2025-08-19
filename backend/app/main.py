@@ -798,17 +798,72 @@ async def chat_endpoint(payload: ChatMessage) -> ChatResponse:
         topic = "general"
         lower = text.lower()
 
-        # Naive keyword routing in English
-        if any(k in lower for k in ["irrigation", "water", "moisture"]):
+        # Try knowledge base first
+        from .knowledge_base import get_faq_answer
+        kb_answer = get_faq_answer(text)
+        if kb_answer:
+            reply_text = kb_answer
+            if language != "en":
+                try:
+                    reply_text = coordinator._translate_text(reply_text, language)
+                except Exception:
+                    pass
+            return ChatResponse(reply=reply_text, topic="faq", language=language)
+        
+        # If no FAQ answer found, try OpenAI fallback first
+        api_key = os.getenv("OPENAI_API_KEY")
+        if _OpenAIClient and api_key:
+            try:
+                client = _OpenAIClient(api_key=api_key)
+                model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+                sys = (
+                    "You are KrishiMitra, an expert agricultural assistant for Indian farmers. "
+                    "Your job is to answer farming questions with practical, region-specific, and actionable advice. "
+                    "Always use reliable sources and best practices for Indian agriculture. "
+                    "If the user asks about crops, pests, irrigation, fertilizer, weather, market, finance, or government schemes, provide detailed, step-by-step guidance. "
+                    "Be concise, clear, and safe. If you don't know, say so. Always respond in the user's requested language."
+                )
+                user_ctx = []
+                if payload.crop:
+                    user_ctx.append(f"crop={payload.crop}")
+                if payload.state:
+                    user_ctx.append(f"state={payload.state}")
+                if payload.district:
+                    user_ctx.append(f"district={payload.district}")
+                if payload.irrigation_type:
+                    user_ctx.append(f"irrigation={payload.irrigation_type}")
+                ctx_str = ("; ".join(user_ctx)) or "no extra context"
+                messages = [
+                    {"role": "system", "content": sys},
+                    {"role": "user", "content": f"Language={language}. Context: {ctx_str}. Question: {text}"},
+                ]
+                comp = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=400,
+                )
+                reply_text = (comp.choices[0].message.content or "").strip()
+                return ChatResponse(reply=reply_text, topic="openai", language=language)
+            except Exception as e:
+                print(f"OpenAI fallback failed: {e}")
+                # Continue to agent routing if OpenAI fails
+
+        # Expanded keyword routing for farming topics
+        if any(k in lower for k in ["irrigation", "water", "moisture", "drip", "sprinkler", "canal", "rainfed"]):
             topic = "irrigation"
-        elif any(k in lower for k in ["fertilizer", "nutrient", "npk"]):
+        elif any(k in lower for k in ["fertilizer", "nutrient", "npk", "urea", "dap", "manure", "compost", "soil health"]):
             topic = "fertilizer"
-        elif any(k in lower for k in ["pest", "insect", "disease", "fungus", "blight", "rust"]):
+        elif any(k in lower for k in ["pest", "insect", "disease", "fungus", "blight", "rust", "aphid", "borer", "mite", "trap"]):
             topic = "pest"
-        elif any(k in lower for k in ["market", "price", "sell", "msps", "msp", "scheme", "loan"]):
+        elif any(k in lower for k in ["market", "price", "sell", "msp", "scheme", "loan", "mandi", "profit", "storage", "demand", "supply"]):
             topic = "market"
-        elif any(k in lower for k in ["weather", "rain", "wind", "heat", "storm"]):
+        elif any(k in lower for k in ["weather", "rain", "wind", "heat", "storm", "drought", "flood", "hail", "cyclone", "temperature"]):
             topic = "weather_risk"
+        elif any(k in lower for k in ["seed", "variety", "crop selection", "sowing", "harvest", "yield", "season", "recommendation"]):
+            topic = "seed_crop"
+        elif any(k in lower for k in ["finance", "policy", "insurance", "subsidy", "government", "credit", "pm-kisan", "bima", "loan"]):
+            topic = "finance_policy"
 
         # Build a minimal AdvisoryRequest using stored profile if available
         minimal_request = AdvisoryRequest(
@@ -837,17 +892,36 @@ async def chat_endpoint(payload: ChatMessage) -> ChatResponse:
         # Route to specific agent when relevant, else provide general guidance
         reply_lines: List[str] = []
         used_openai = False
+        agent_success = False
+        
         try:
             if topic in coordinator.agents:
                 agent = coordinator.agents[topic]
                 rec = await agent.recommend(minimal_request)
-                reply_lines.append(f"{rec.summary}")
-                for t in rec.tasks[:3]:
-                    reply_lines.append(f"- {t}")
-            else:
-                reply_lines.append(
-                    "I can help with irrigation, fertilizer use, pest control, weather risks, and markets."
-                )
+                if rec and rec.summary and rec.summary.strip():
+                    reply_lines.append(f"{rec.summary}")
+                    for t in rec.tasks[:3]:
+                        if t and t.strip():
+                            reply_lines.append(f"- {t}")
+                    agent_success = True
+                else:
+                    print(f"Agent {topic} returned empty or invalid response")
+            
+            # If no specific agent or agent failed, try to provide topic-specific guidance
+            if not agent_success:
+                topic_guidance = {
+                    "irrigation": "For irrigation, check soil moisture daily. Water early morning or evening. Avoid overwatering which can cause root rot.",
+                    "fertilizer": "Apply fertilizers based on soil test results. Use balanced NPK for most crops. Apply during active growth periods.",
+                    "pest": "Scout fields regularly for pest signs. Use integrated pest management. Apply treatments only when threshold levels are reached.",
+                    "market": "Monitor local market prices. Consider storage options for better prices. Plan harvest timing based on market demand.",
+                    "weather_risk": "Check weather forecasts daily. Prepare for extreme weather events. Adjust farming activities based on predictions.",
+                    "seed_crop": "Choose varieties suited to your climate and soil. Use certified seeds. Follow recommended planting dates.",
+                    "finance_policy": "Check government schemes like PM-KISAN. Maintain good credit history. Apply for crop insurance."
+                }
+                
+                guidance = topic_guidance.get(topic, "I can help with irrigation, fertilizer use, pest control, weather risks, and markets.")
+                reply_lines.append(guidance)
+                
         except Exception as e:
             print(f"Chat agent error: {e}")
             # Fall back to OpenAI if configured
@@ -857,9 +931,11 @@ async def chat_endpoint(payload: ChatMessage) -> ChatResponse:
                     client = _OpenAIClient(api_key=api_key)
                     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
                     sys = (
-                        "You are an agricultural assistant for Indian farmers. "
-                        "Answer clearly, practically, and safely. Keep it concise. "
-                        "Always respond in the user's requested language."
+                        "You are KrishiMitra, an expert agricultural assistant for Indian farmers. "
+                        "Your job is to answer farming questions with practical, region-specific, and actionable advice. "
+                        "Always use reliable sources and best practices for Indian agriculture. "
+                        "If the user asks about crops, pests, irrigation, fertilizer, weather, market, finance, or government schemes, provide detailed, step-by-step guidance. "
+                        "Be concise, clear, and safe. If you don't know, say so. Always respond in the user's requested language."
                     )
                     user_ctx = []
                     if payload.crop:

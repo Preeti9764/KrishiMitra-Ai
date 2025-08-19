@@ -131,12 +131,12 @@ class AdvisoryCoordinator:
         # If we can, try full translation API for better quality
         iso = self._lang_to_iso.get(language)
         best_output = dictionary_output
-        if iso:
+        if iso and len(text) > 10:  # Only translate longer texts to reduce API calls
             for endpoint in self._translation_endpoints:
                 try:
                     resp = requests.post(
                         endpoint,
-                        timeout=4,
+                        timeout=2,  # Reduced timeout to fail faster
                         json={
                             "q": text,
                             "source": "en",

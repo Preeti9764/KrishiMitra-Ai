@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { Login } from './Login'
 import { Chatbot } from './Chatbot'
+import GoogleTranslate from './GoogleTranslate'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001'
 
 // Types
 type AdvisoryResponse = {
@@ -538,7 +539,7 @@ export const App: React.FC = () => {
               {loading ? (<><span className="loading"></span>Generating...</>) : (currentLang.generateAdvisory)}
             </button>
             <button className="btn secondary" onClick={() => setResponse(null)} disabled={loading}>{currentLang.clear}</button>
-            <button className="btn secondary" onClick={() => { window.location.hash = '#/chat' }}>Chatbot</button>
+            <button className="btn secondary" onClick={() => { window.location.hash = '#/chat' }}>🤖KrishiBot</button>
           </div>
         </div>
       </header>
@@ -687,7 +688,7 @@ export const App: React.FC = () => {
                   </select>
                 </div>
               </div>
-              <div className="row">
+              {/* <div className="row">
                 <div className="field grow">
                   <label>{currentLang.advisoryHorizon}</label>
                   <input type="number" min="1" max="30" value={formData.horizon} onChange={(e) => updateFormData('horizon', parseInt(e.target.value))} />
@@ -705,7 +706,8 @@ export const App: React.FC = () => {
                     <option value="gu">ગુજરાતી (Gujarati)</option>
                   </select>
                 </div>
-              </div>
+              </div> */}
+              <GoogleTranslate />
             </div>
           </div>
         </div>

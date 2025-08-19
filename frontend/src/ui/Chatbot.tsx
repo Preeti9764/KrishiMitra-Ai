@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001'
 
 type Props = {
   defaultLanguage?: string
@@ -63,9 +63,9 @@ export const Chatbot: React.FC<Props> = ({ defaultLanguage = 'en' }) => {
       <header className="header">
         <div className="header-content">
           <div className="logo">
-            <div className="logo-icon">💬</div>
+            <div className="logo-icon">🤖</div>
             <div>
-              <div className="title">Farmer Chatbot</div>
+              <div className="title">🤖 KrishiBot</div>
               <div className="subtitle">Multilingual help for irrigation, pests, fertilizer, weather and markets</div>
             </div>
           </div>

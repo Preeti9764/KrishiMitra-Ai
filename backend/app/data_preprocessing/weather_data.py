@@ -14,7 +14,7 @@ class WeatherDataProcessor:
         self.openweather_api_key = None  # Set via environment variable
         
     async def get_nasa_power_data(self, lat: float, lon: float, start_date: str, end_date: str) -> Dict[str, Any]:
-        """Fetch weather data from NASA POWER API"""
+        """Fetch weather data from NASA POWER API with improved error handling"""
         try:
             params = {
                 "parameters": "T2M,RH2M,WS2M,PRECTOTCORR,ALLSKY_SFC_SW_DWN",
@@ -26,12 +26,15 @@ class WeatherDataProcessor:
                 "format": "JSON"
             }
             
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=5.0) as client:  # Add timeout
                 response = await client.get(self.nasa_power_base_url, params=params)
                 response.raise_for_status()
                 data = response.json()
                 
             return self._process_nasa_power_response(data)
+        except asyncio.TimeoutError:
+            print(f"NASA POWER API timeout for location ({lat}, {lon})")
+            return self._get_fallback_weather_data()
         except Exception as e:
             print(f"Error fetching NASA POWER data: {e}")
             return self._get_fallback_weather_data()
